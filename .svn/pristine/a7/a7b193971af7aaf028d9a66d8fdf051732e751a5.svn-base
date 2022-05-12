@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<Collect xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" name="common_parameters">
+  <Parameter ParameterType="wait_unable_echo">
+    <Name>Время ожидания включения эхо после последнего полученного кадра от модуля</Name>
+    <Value>50</Value>
+    <Measurement>мс</Measurement>
+  </Parameter>
+  <Parameter ParameterType="period_resend_echo">
+    <Name>Период переотправки кадра эхо</Name>
+    <Value>30</Value>
+    <Measurement>мс</Measurement>
+  </Parameter>
+  <Parameter ParameterType="numeration_resend_echo">
+    <Name>Количество переотправок кадра эхо</Name>
+    <Value>5</Value>
+    <Measurement />
+  </Parameter>
+  <Parameter ParameterType="num_send_multi">
+    <Name>Количество повторов отправки кадра по мультикасту</Name>
+    <Value>5</Value>
+    <Measurement />
+  </Parameter>
+  <Parameter ParameterType="time_multi">
+    <Name>Время паузы между переотправкой кадра по мультикасту</Name>
+    <Value>1</Value>
+    <Measurement>мс</Measurement>
+  </Parameter>
+  <Parameter ParameterType="max_wait_time">
+    <Name>Время ожидания кадра-подтверрждения</Name>
+    <Value>50</Value>
+    <Measurement>мс</Measurement>
+  </Parameter>
+  <Parameter ParameterType="numeration_resend">
+    <Name>Количество переповторов кадра при отсутствии кадра-подтверрждения</Name>
+    <Value>5</Value>
+    <Measurement />
+  </Parameter>
+</Collect>

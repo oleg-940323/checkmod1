@@ -1,0 +1,894 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.IO;
+using System.Linq;
+using System.Net;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows;
+
+namespace checkmod
+{
+
+    public class Signals : INotifyPropertyChanged
+    {
+
+        #region INotifyPropertyChanged Members
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        private void OnPropChanged(string propName)
+        {
+            if (this.PropertyChanged != null) this.PropertyChanged(this, new PropertyChangedEventArgs(propName));
+        }
+        #endregion // INotifyPropertyChanged Members
+
+        public Signals(Driver dr)
+        {
+            this.dr = dr;
+        }
+
+        Driver dr;
+
+        object locker = new object();
+
+        // Дискриптор файла бинар
+        BinaryWriter writer = null;
+
+        // Дискриптор файла кфг
+        StreamWriter fStream = null;
+
+        ~Signals()
+        {
+            forever = false;
+        }
+
+        private bool forever = true;
+
+        // Номер байта 
+        int num;
+
+        // Флаг блокировки обновления выходных данных
+        public bool f_lock_update_data = true;
+
+        UInt32 id, seq = 1;
+
+        // Длина выходных данных
+        public int len_out_data;
+
+        // Статус
+        private UInt32 _stat;
+        public UInt32 stat
+        {
+            get { return _stat; }
+            set
+            {
+                _stat = value;
+                OnPropChanged("stat");
+            }
+        }
+
+        string path = null, path_cfg = null, cfg = null;
+
+        public bool write_sign { get; set; } = false;
+
+        DateTime current_time;
+
+        List<byte[][]> values = null;
+
+        TimeSpan elapsedSpan;
+
+        // Метод парсинга буфера данных
+        public void ParsData(byte[] data, Module m)
+        {
+            byte size = 0;
+            byte[] tempr2 = null;
+            long elapsedTicks;
+            string[] val = new string[12];
+            values = new List<byte[][]>();
+            
+            // Текущее время
+            current_time = DateTime.Now;
+
+            // Количество тиков в промежуток с 1 января 1970 по настоящее время
+            elapsedTicks = current_time.Ticks - Helper.start_time.Ticks;
+
+            elapsedSpan = new TimeSpan(elapsedTicks);
+
+            int i = 0, j = 0, ind = 0, qq;
+            num = 0;
+            byte[] tempr = new byte[5000], arr = null;
+
+            
+
+            // Статус модуля
+            stat = BitConverter.ToUInt32(data, num);
+            num += 4;
+
+
+            if (write_sign)
+            {
+                lock (locker)
+                {
+                    if (m.dr.f_reset_ring_buffer)
+                    {
+                        Helper.ring_buffer[m.ip.Address].Clear();
+                        m.dr.f_reset_ring_buffer = false;
+                    }  
+                }
+
+                if (writer == null)
+                {
+                    path = @".\Statistic\" + m.header + ".dat";
+                    path_cfg = @".\Statistic\" + m.header + ".cfg";
+                    writer = new BinaryWriter(File.Open(path, FileMode.Append));
+                    fStream = new StreamWriter(File.Open(path_cfg, FileMode.Create));
+                }
+
+                // Запись в конфигурационный файл
+                //using (StreamWriter fStream = new StreamWriter(File.Open(path_cfg, FileMode.Create)))
+                if (cfg == null)
+                {
+                    if (m.header.StartsWith("TD9"))
+                    {
+                        cfg = $"{m.header},{m.header},2013\n{m.mod.Parameters[3].Parameter.Length},0A,{m.mod.Parameters[3].Parameter.Length}D\n";
+
+                        for (int q = 1; q <= m.mod.Parameters[3].Parameter.Length; q++)
+                        {
+                            cfg += $"{q},DOutput{q},,,1\n";
+                        }
+                        cfg += $"50\n1\n1000000,199999\n{DateTime.Now.Day.ToString()}/{DateTime.Now.Month.ToString()}/" +
+                            $"{DateTime.Now.Year.ToString()},{DateTime.Now.Hour.ToString()}:{DateTime.Now.Minute.ToString()}:" +
+                            $"{DateTime.Now.Second.ToString()}.{(elapsedTicks * 100 - (long)elapsedSpan.TotalSeconds * (long)Math.Pow(10, 9)).ToString()}\n" +
+                            $"{DateTime.Now.Day.ToString()}/{DateTime.Now.Month.ToString()}/{DateTime.Now.Year.ToString()},{DateTime.Now.Hour.ToString()}:" +
+                            $"{DateTime.Now.Minute.ToString()}:{DateTime.Now.Second.ToString()}." +
+                            $"{(elapsedTicks * 100 - (long)elapsedSpan.TotalSeconds * (long)Math.Pow(10, 9)).ToString()}\nASCII\n1";
+
+                    }
+                    else if (m.header.StartsWith("TA902"))
+                    {
+                        cfg = $"{m.header},{m.header},2013\n{m.mod.Parameters[3].Parameter.Length},{m.mod.Parameters[3].Parameter.Length}A,0D\n";
+
+                        string[] str = m.header.Split('=', '(', ',');
+
+                        byte volt = byte.Parse(str[3]);
+
+                        for (int q = 1; q <= m.mod.Parameters[3].Parameter.Length - 1; q++)
+                        {
+                            cfg += $"{q},RMS_SIG{q},,,";
+
+                            if (q - 1 < volt)
+                            {
+                                cfg += "mV";
+
+                                if ((string.IsNullOrEmpty(m.mod.Parameters[3].Parameter[q - 1].Min)) ||
+                                (string.IsNullOrEmpty(m.mod.Parameters[3].Parameter[q - 1].Max)))
+                                {
+                                    cfg += $",0.1,0.0,0,{Helper.MinMaxOfType(m.mod.Parameters[3].Parameter[q - 1].datatype).min}," +
+                                      $"{Helper.MinMaxOfType(m.mod.Parameters[3].Parameter[q - 1].datatype).max},220.00,0.10,S\n";
+                                }
+                                else
+                                    cfg += $",0.1,0.0,0,{m.mod.Parameters[3].Parameter[q - 1].Min},{m.mod.Parameters[3].Parameter[q - 1].Max},220.00,0.10,S\n";
+                            }
+                            else
+                            {
+                                cfg += "mA";
+
+                                if ((string.IsNullOrEmpty(m.mod.Parameters[3].Parameter[q - 1].Min)) ||
+                                (string.IsNullOrEmpty(m.mod.Parameters[3].Parameter[q - 1].Max)))
+                                {
+                                    cfg += $",0.1,0.0,0,{Helper.MinMaxOfType(m.mod.Parameters[3].Parameter[q - 1].datatype).min}," +
+                                      $"{Helper.MinMaxOfType(m.mod.Parameters[3].Parameter[q - 1].datatype).max},1000.00,5.00,S\n";
+                                }
+                                else
+                                    cfg += $",0.1,0.0,0,{m.mod.Parameters[3].Parameter[q - 1].Min},{m.mod.Parameters[3].Parameter[q - 1].Max},1000.00,5.00,S\n";
+                            }
+
+                            cfg += $",0.0,0.0,0,{m.mod.Parameters[3].Parameter[q - 1].Min},{m.mod.Parameters[3].Parameter[q - 1].Max},1000.00,5.00,S\n";
+                        }
+                        cfg += $"50\n1\n1000000,199999\n{DateTime.Now.Day.ToString()}/{DateTime.Now.Month.ToString()}/{DateTime.Now.Year.ToString()}," +
+                            $"{DateTime.Now.Hour.ToString()}:{DateTime.Now.Minute.ToString()}:{DateTime.Now.Second.ToString()}." +
+                            $"{(elapsedTicks * 100 - (long)elapsedSpan.TotalSeconds * (long)Math.Pow(10, 9)).ToString()}\n" +
+                            $"{DateTime.Now.Day.ToString()}/{DateTime.Now.Month.ToString()}/{DateTime.Now.Year.ToString()}" +
+                            $",{DateTime.Now.Hour.ToString()}:{DateTime.Now.Minute.ToString()}:{DateTime.Now.Second.ToString()}." +
+                            $"{(elapsedTicks * 100 - (long)elapsedSpan.TotalSeconds * (long)Math.Pow(10, 9)).ToString()}\nFLOAT32\n1";
+                    }
+                    else if (m.header.StartsWith("TA901"))
+                    {
+                        cfg = $"{m.header},{m.header},2013\n{m.mod.Parameters[3].Parameter.Length},{m.mod.Parameters[3].Parameter.Length}A,0D\n";
+
+                        string[] str = m.header.Split('=', '(', ',');
+
+                        byte volt = byte.Parse(str[3]);
+
+                        for (int q = 1; q <= m.mod.Parameters[3].Parameter.Length; q++)
+                        {
+                            cfg += $"{q},DInput{q},,,";
+
+                            if (q - 1 < volt)
+                            {
+                                cfg += "V";
+
+                                if ((string.IsNullOrEmpty(m.mod.Parameters[3].Parameter[q - 1].Min)) ||
+                                (string.IsNullOrEmpty(m.mod.Parameters[3].Parameter[q - 1].Max)))
+                                {
+                                    cfg += $",0.1,0.0,0,{Helper.MinMaxOfType(m.mod.Parameters[3].Parameter[q - 1].datatype).min}," +
+                                      $"{Helper.MinMaxOfType(m.mod.Parameters[3].Parameter[q - 1].datatype).max},220.00,0.10,S\n";
+                                }
+                                else
+                                    cfg += $",0.1,0.0,0,{m.mod.Parameters[3].Parameter[q - 1].Min},{m.mod.Parameters[3].Parameter[q - 1].Max},220.00,0.10,S\n";
+                            }
+                            else
+                            {
+                                cfg += "A";
+
+                                if ((string.IsNullOrEmpty(m.mod.Parameters[3].Parameter[q - 1].Min)) ||
+                                (string.IsNullOrEmpty(m.mod.Parameters[3].Parameter[q - 1].Max)))
+                                {
+                                    cfg += $",0.1,0.0,0,{Helper.MinMaxOfType(m.mod.Parameters[3].Parameter[q - 1].datatype).min}," +
+                                      $"{Helper.MinMaxOfType(m.mod.Parameters[3].Parameter[q - 1].datatype).max},1000.00,5.00,S\n";
+                                }
+                                else
+                                    cfg += $",0.1,0.0,0,{m.mod.Parameters[3].Parameter[q - 1].Min},{m.mod.Parameters[3].Parameter[q - 1].Max},1000.00,5.00,S\n";
+                            }
+
+                        }
+                        cfg += $"50\n1\n1000000,199999\n{DateTime.Now.Day.ToString()}/{DateTime.Now.Month.ToString()}/{DateTime.Now.Year.ToString()}," +
+                            $"{DateTime.Now.Hour.ToString()}:{DateTime.Now.Minute.ToString()}:{DateTime.Now.Second.ToString()}." +
+                            $"{(elapsedTicks * 100 - (long)elapsedSpan.TotalSeconds * (long)Math.Pow(10, 9)).ToString()}\n" +
+                            $"{DateTime.Now.Day.ToString()}/{DateTime.Now.Month.ToString()}/{DateTime.Now.Year.ToString()}," +
+                            $"{DateTime.Now.Hour.ToString()}:{DateTime.Now.Minute.ToString()}:{DateTime.Now.Second.ToString()}." +
+                            $"{(elapsedTicks * 100 - (long)elapsedSpan.TotalSeconds * (long)Math.Pow(10, 9)).ToString()}\nFLOAT32\n1";
+                    }
+                    else if (m.header.StartsWith("TA9"))
+                    {
+                        cfg = $"{m.header},{m.header},2013\n{(m.mod.Parameters[3].Parameter.Length * 2)-5}," +
+                            $"{(m.mod.Parameters[3].Parameter.Length * 2) - 5}A,0D\n";
+
+                        string[] str = m.header.Split('=', '(', ',');
+
+                        byte volt = byte.Parse(str[3]);
+                        volt += byte.Parse(str[3]);
+
+                        for (int q = 1; q <= (m.mod.Parameters[3].Parameter.Length * 2) - 5;)
+                        {
+                            for (qq = q; qq < q + 2; qq++)
+                            {
+                                if (qq == 26)
+                                    break;
+
+                                if (qq % 2 == 1)
+                                    cfg += $"{qq},VAL_SIG{qq},,,";
+                                else
+                                    cfg += $"{qq},RMS_SIG{qq},,,";
+
+                                if (qq - 1 < volt)
+                                {
+                                    cfg += "V,1.0,0.0,0,-1000,1000,1.0,1.0,S\n";
+                                }
+                                else
+                                {
+                                    cfg += "A,1.0,0.0,0,-1000,1000,1.0,1.0,S\n";
+                                }
+                            }
+                            q = qq;
+                        }
+                        cfg += $"50\n1\n4000,400000\n{DateTime.Now.Day.ToString()}/{DateTime.Now.Month.ToString()}/{DateTime.Now.Year.ToString()}," +
+                            $"{DateTime.Now.Hour.ToString()}:{DateTime.Now.Minute.ToString()}:{DateTime.Now.Second.ToString()}." +
+                            $"{(elapsedTicks * 100 - (long)elapsedSpan.TotalSeconds * (long)Math.Pow(10, 9)).ToString()}\n" +
+                            $"{DateTime.Now.Day.ToString()}/{DateTime.Now.Month.ToString()}/{DateTime.Now.Year.ToString()}," +
+                            $"{DateTime.Now.Hour.ToString()}:{DateTime.Now.Minute.ToString()}:{DateTime.Now.Second.ToString()}." +
+                            $"{(elapsedTicks * 100 - (long)elapsedSpan.TotalSeconds * (long)Math.Pow(10, 9)).ToString()}\nFLOAT32\n1";
+                    }
+                }
+
+                while (forever)
+                {
+                    // Идентификационный номер сигнала
+                    id = BitConverter.ToUInt32(data, num);
+                    num += 4;
+                    if (id == 0 || num > data.Length) break;
+
+                    // Входа для ЦП или выхода для модуля
+                    if (id > 1000000)
+                    {
+                        if (m.mod.name.StartsWith("TA91"))
+                        {
+                            if (id >= 1000016)
+                            {
+                                num += data[num] + 1;
+                                continue;
+                            }
+                            else if (id == 1000014)
+                            {
+                                num++;
+                                m.pr.out_signals[j].id = id;
+
+                                size = Helper.SizeOfType(m.mod.Parameters[3].Parameter[13].datatype);
+                                tempr2 = new byte[size];
+                                Array.Copy(data, num, tempr2, 0, size);
+
+                                m.pr.out_signals[j].ReInit(tempr2);
+
+                                values.Add(Helper.GetInstVal(tempr2));
+
+                                num += size;
+                            }
+                            else if (id == 1000015)
+                            {
+                                j++;
+
+                                num++;
+                                m.pr.out_signals[j].id = id;
+
+                                size = Helper.SizeOfType(m.pr.out_signals[j].data_type);
+                                tempr2 = new byte[size];
+                                Array.Copy(data, num, tempr2, 0, size);
+                                m.pr.out_signals[j].ReInit(tempr2);
+
+                                j++;
+
+                                num += size;
+                            }
+                            else
+                            {
+                                num++;
+                                m.pr.out_signals[j].id = id;
+
+                                size = Helper.SizeOfType(m.pr.out_signals[j].data_type);
+                                tempr2 = new byte[size];
+                                Array.Copy(data, num, tempr2, 0, size);
+                                m.pr.out_signals[j].ReInit(tempr2);
+
+                                j++;
+
+                                num += size;
+                            }
+                        }
+                        else
+                        {
+                            if (id - 1000000 > m.pr.out_signals.Count - 1)
+                            {
+                                num += data[num] + 1;
+                                continue;
+                            }
+
+                            num++;
+                            m.pr.out_signals[j].id = id;
+
+                            size = Helper.SizeOfType(m.pr.out_signals[j].data_type);
+                            tempr2 = new byte[size];
+                            Array.Copy(data, num, tempr2, 0, size);
+                            m.pr.out_signals[j].ReInit(tempr2);
+
+                            j++;
+
+                            num += size;
+                        }
+                    }
+                    // Выхода для ЦП или входа для модуля
+                    else
+                    {
+                        if (m.mod.name.StartsWith("TA91"))
+                        {
+                            if (id > 1000015)
+                            {
+                                num += data[num] + 1;
+                                continue;
+                            }
+                        }
+                        else
+                        {
+                            if (id - 1000000 > m.pr.out_signals.Count - 1)
+                            {
+                                num += data[num] + 1;
+                                continue;
+                            }
+                        }
+
+                        num++;
+                        m.pr.in_signals[i].id = id;
+
+                        size = Helper.SizeOfType(m.pr.in_signals[i].data_type);
+                        tempr2 = new byte[size];
+                        Array.Copy(data, num, tempr2, 0, size);
+                        m.pr.in_signals[i].ReInit(tempr2);
+                        i++;
+                        num += size;
+                    }
+                }
+
+                if (m.mod.name.StartsWith("TA91"))
+                {
+                    foreach (byte[][] p in values)
+                    {
+                        Array.Copy(Helper.InvertArray(BitConverter.GetBytes(seq)), 0, tempr, ind, BitConverter.GetBytes(seq).Length);
+                        ind += BitConverter.GetBytes(seq).Length;
+
+                        Array.Copy(Helper.InvertArray(BitConverter.GetBytes(seq + 9)), 0, tempr, ind, BitConverter.GetBytes(seq).Length);
+                        ind += BitConverter.GetBytes(seq++).Length;
+
+                        for (int n = 0; n < 12; n++)
+                        {
+                            Array.Copy(p[n], 0, tempr, ind, 4);
+                            ind += 4;
+
+                            Array.Copy(BitConverter.GetBytes(Single.Parse(m.pr.out_signals[n].children[2].value)), 0, tempr, ind, 4);
+                            ind += 4;
+                        }
+
+                        Array.Copy(BitConverter.GetBytes(Single.Parse(m.pr.out_signals[12].children[2].value)), 0, tempr, ind, 4);
+                        ind += 4;
+
+                        arr = new byte[ind];
+                        Array.Copy(tempr, 0, arr, 0, ind);
+
+                        writer.Write(arr);
+                        
+                        ind = 0;
+                    }
+                }
+            }
+            else if (!write_sign && Helper.ring_buffer[m.ip.Address].Count != 0 && m.dr.f_reset_ring_buffer == false)
+            {
+                lock (locker) { m.dr.f_enable_write_data = false; }
+
+                if (writer == null)
+                {
+                    path = @".\Statistic\" + m.header + ".dat";
+                    path_cfg = @".\Statistic\" + m.header + ".cfg";
+                    writer = new BinaryWriter(File.Open(path, FileMode.Append));
+                    fStream = new StreamWriter(File.Open(path_cfg, FileMode.Create));
+                }
+
+                // Запись в конфигурационный файл
+                if (cfg == null)
+                {
+                    if (m.header.StartsWith("TD9"))
+                    {
+                        cfg = $"{m.header},{m.header},2013\n{m.mod.Parameters[3].Parameter.Length},0A,{m.mod.Parameters[3].Parameter.Length}D\n";
+
+                        for (int q = 1; q <= m.mod.Parameters[3].Parameter.Length; q++)
+                        {
+                            cfg += $"{q},DOutput{q},,,1\n";
+                        }
+                        cfg += $"50\n1\n1000000,199999\n{DateTime.Now.Day.ToString()}/{DateTime.Now.Month.ToString()}/" +
+                            $"{DateTime.Now.Year.ToString()},{DateTime.Now.Hour.ToString()}:{DateTime.Now.Minute.ToString()}:" +
+                            $"{DateTime.Now.Second.ToString()}.{(elapsedTicks * 100 - (long)elapsedSpan.TotalSeconds * (long)Math.Pow(10, 9)).ToString()}\n" +
+                            $"{DateTime.Now.Day.ToString()}/{DateTime.Now.Month.ToString()}/{DateTime.Now.Year.ToString()},{DateTime.Now.Hour.ToString()}:" +
+                            $"{DateTime.Now.Minute.ToString()}:{DateTime.Now.Second.ToString()}." +
+                            $"{(elapsedTicks * 100 - (long)elapsedSpan.TotalSeconds * (long)Math.Pow(10, 9)).ToString()}\nASCII\n1";
+
+                    }
+                    else if (m.header.StartsWith("TA902"))
+                    {
+                        cfg = $"{m.header},{m.header},2013\n{m.mod.Parameters[3].Parameter.Length},{m.mod.Parameters[3].Parameter.Length}A,0D\n";
+
+                        string[] str = m.header.Split('=', '(', ',');
+
+                        byte volt = byte.Parse(str[3]);
+
+                        for (int q = 1; q <= m.mod.Parameters[3].Parameter.Length - 1; q++)
+                        {
+                            cfg += $"{q},RMS_SIG{q},,,";
+
+                            if (q - 1 < volt)
+                            {
+                                cfg += "mV";
+
+                                if ((string.IsNullOrEmpty(m.mod.Parameters[3].Parameter[q - 1].Min)) ||
+                                (string.IsNullOrEmpty(m.mod.Parameters[3].Parameter[q - 1].Max)))
+                                {
+                                    cfg += $",0.1,0.0,0,{Helper.MinMaxOfType(m.mod.Parameters[3].Parameter[q - 1].datatype).min}," +
+                                      $"{Helper.MinMaxOfType(m.mod.Parameters[3].Parameter[q - 1].datatype).max},220.00,0.10,S\n";
+                                }
+                                else
+                                    cfg += $",0.1,0.0,0,{m.mod.Parameters[3].Parameter[q - 1].Min},{m.mod.Parameters[3].Parameter[q - 1].Max},220.00,0.10,S\n";
+                            }
+                            else
+                            {
+                                cfg += "mA";
+
+                                if ((string.IsNullOrEmpty(m.mod.Parameters[3].Parameter[q - 1].Min)) ||
+                                (string.IsNullOrEmpty(m.mod.Parameters[3].Parameter[q - 1].Max)))
+                                {
+                                    cfg += $",0.1,0.0,0,{Helper.MinMaxOfType(m.mod.Parameters[3].Parameter[q - 1].datatype).min}," +
+                                      $"{Helper.MinMaxOfType(m.mod.Parameters[3].Parameter[q - 1].datatype).max},1000.00,5.00,S\n";
+                                }
+                                else
+                                    cfg += $",0.1,0.0,0,{m.mod.Parameters[3].Parameter[q - 1].Min},{m.mod.Parameters[3].Parameter[q - 1].Max},1000.00,5.00,S\n";
+                            }
+
+                            cfg += $",0.0,0.0,0,{m.mod.Parameters[3].Parameter[q - 1].Min},{m.mod.Parameters[3].Parameter[q - 1].Max},1000.00,5.00,S\n";
+                        }
+                        cfg += $"50\n1\n1000000,199999\n{DateTime.Now.Day.ToString()}/{DateTime.Now.Month.ToString()}/{DateTime.Now.Year.ToString()}," +
+                            $"{DateTime.Now.Hour.ToString()}:{DateTime.Now.Minute.ToString()}:{DateTime.Now.Second.ToString()}." +
+                            $"{(elapsedTicks * 100 - (long)elapsedSpan.TotalSeconds * (long)Math.Pow(10, 9)).ToString()}\n" +
+                            $"{DateTime.Now.Day.ToString()}/{DateTime.Now.Month.ToString()}/{DateTime.Now.Year.ToString()}" +
+                            $",{DateTime.Now.Hour.ToString()}:{DateTime.Now.Minute.ToString()}:{DateTime.Now.Second.ToString()}." +
+                            $"{(elapsedTicks * 100 - (long)elapsedSpan.TotalSeconds * (long)Math.Pow(10, 9)).ToString()}\nFLOAT32\n1";
+                    }
+                    else if (m.header.StartsWith("TA901"))
+                    {
+                        cfg = $"{m.header},{m.header},2013\n{m.mod.Parameters[3].Parameter.Length},{m.mod.Parameters[3].Parameter.Length}A,0D\n";
+
+                        string[] str = m.header.Split('=', '(', ',');
+
+                        byte volt = byte.Parse(str[3]);
+
+                        for (int q = 1; q <= m.mod.Parameters[3].Parameter.Length; q++)
+                        {
+                            cfg += $"{q},DInput{q},,,";
+
+                            if (q - 1 < volt)
+                            {
+                                cfg += "V";
+
+                                if ((string.IsNullOrEmpty(m.mod.Parameters[3].Parameter[q - 1].Min)) ||
+                                (string.IsNullOrEmpty(m.mod.Parameters[3].Parameter[q - 1].Max)))
+                                {
+                                    cfg += $",0.1,0.0,0,{Helper.MinMaxOfType(m.mod.Parameters[3].Parameter[q - 1].datatype).min}," +
+                                      $"{Helper.MinMaxOfType(m.mod.Parameters[3].Parameter[q - 1].datatype).max},220.00,0.10,S\n";
+                                }
+                                else
+                                    cfg += $",0.1,0.0,0,{m.mod.Parameters[3].Parameter[q - 1].Min},{m.mod.Parameters[3].Parameter[q - 1].Max},220.00,0.10,S\n";
+                            }
+                            else
+                            {
+                                cfg += "A";
+
+                                if ((string.IsNullOrEmpty(m.mod.Parameters[3].Parameter[q - 1].Min)) ||
+                                (string.IsNullOrEmpty(m.mod.Parameters[3].Parameter[q - 1].Max)))
+                                {
+                                    cfg += $",0.1,0.0,0,{Helper.MinMaxOfType(m.mod.Parameters[3].Parameter[q - 1].datatype).min}," +
+                                      $"{Helper.MinMaxOfType(m.mod.Parameters[3].Parameter[q - 1].datatype).max},1000.00,5.00,S\n";
+                                }
+                                else
+                                    cfg += $",0.1,0.0,0,{m.mod.Parameters[3].Parameter[q - 1].Min},{m.mod.Parameters[3].Parameter[q - 1].Max},1000.00,5.00,S\n";
+                            }
+
+                        }
+                        cfg += $"50\n1\n1000000,199999\n{DateTime.Now.Day.ToString()}/{DateTime.Now.Month.ToString()}/{DateTime.Now.Year.ToString()}," +
+                            $"{DateTime.Now.Hour.ToString()}:{DateTime.Now.Minute.ToString()}:{DateTime.Now.Second.ToString()}." +
+                            $"{(elapsedTicks * 100 - (long)elapsedSpan.TotalSeconds * (long)Math.Pow(10, 9)).ToString()}\n" +
+                            $"{DateTime.Now.Day.ToString()}/{DateTime.Now.Month.ToString()}/{DateTime.Now.Year.ToString()}," +
+                            $"{DateTime.Now.Hour.ToString()}:{DateTime.Now.Minute.ToString()}:{DateTime.Now.Second.ToString()}." +
+                            $"{(elapsedTicks * 100 - (long)elapsedSpan.TotalSeconds * (long)Math.Pow(10, 9)).ToString()}\nFLOAT32\n1";
+                    }
+                    else if (m.header.StartsWith("TA9"))
+                    {
+                        cfg = $"{m.header},{m.header},2013\n{(m.mod.Parameters[3].Parameter.Length * 2) - 5}," +
+                            $"{(m.mod.Parameters[3].Parameter.Length * 2) - 5}A,0D\n";
+
+                        string[] str = m.header.Split('=', '(', ',');
+
+                        byte volt = byte.Parse(str[3]);
+                        volt += byte.Parse(str[3]);
+
+                        for (int q = 1; q <= (m.mod.Parameters[3].Parameter.Length * 2) - 5;)
+                        {
+                            for (qq = q; qq < q + 2; qq++)
+                            {
+                                if (qq == 26)
+                                    break;
+
+                                if (qq % 2 == 1)
+                                    cfg += $"{qq},VAL_SIG{qq},,,";
+                                else
+                                    cfg += $"{qq},RMS_SIG{qq},,,";
+
+                                if (qq - 1 < volt)
+                                {
+                                    cfg += "V,1.0,0.0,0,-1000,1000,1.0,1.0,S\n";
+                                }
+                                else
+                                {
+                                    cfg += "A,1.0,0.0,0,-1000,1000,1.0,1.0,S\n";
+                                }
+                            }
+                            q = qq;
+                        }
+                        cfg += $"50\n1\n4000,400000\n{DateTime.Now.Day.ToString()}/{DateTime.Now.Month.ToString()}/{DateTime.Now.Year.ToString()}," +
+                            $"{DateTime.Now.Hour.ToString()}:{DateTime.Now.Minute.ToString()}:{DateTime.Now.Second.ToString()}." +
+                            $"{(elapsedTicks * 100 - (long)elapsedSpan.TotalSeconds * (long)Math.Pow(10, 9)).ToString()}\n" +
+                            $"{DateTime.Now.Day.ToString()}/{DateTime.Now.Month.ToString()}/{DateTime.Now.Year.ToString()}," +
+                            $"{DateTime.Now.Hour.ToString()}:{DateTime.Now.Minute.ToString()}:{DateTime.Now.Second.ToString()}." +
+                            $"{(elapsedTicks * 100 - (long)elapsedSpan.TotalSeconds * (long)Math.Pow(10, 9)).ToString()}\nFLOAT32\n1";
+                    }
+                }
+
+                while (forever)
+                {
+                    // Идентификационный номер сигнала
+                    id = BitConverter.ToUInt32(data, num);
+                    num += 4;
+                    if (id == 0 || num > data.Length) break;
+
+                    // Входа для ЦП или выхода для модуля
+                    if (id > 1000000)
+                    {
+                        if (m.mod.name.StartsWith("TA91"))
+                        {
+                            if (id >= 1000016)
+                            {
+                                num += data[num] + 1;
+                                continue;
+                            }
+                            else if (id == 1000014)
+                            {
+                                num++;
+                                m.pr.out_signals[j].id = id;
+
+                                size = Helper.SizeOfType(m.mod.Parameters[3].Parameter[13].datatype);
+                                tempr2 = new byte[size];
+                                Array.Copy(data, num, tempr2, 0, size);
+
+                                m.pr.out_signals[j].ReInit(tempr2);
+
+                                values.Add(Helper.GetInstVal(tempr2));
+
+                                num += size;
+                            }
+                            else if (id == 1000015)
+                            {
+                                j++;
+
+                                num++;
+                                m.pr.out_signals[j].id = id;
+
+                                size = Helper.SizeOfType(m.pr.out_signals[j].data_type);
+                                tempr2 = new byte[size];
+                                Array.Copy(data, num, tempr2, 0, size);
+                                m.pr.out_signals[j].ReInit(tempr2);
+
+                                j++;
+
+                                num += size;
+                            }
+                            else
+                            {
+                                num++;
+                                m.pr.out_signals[j].id = id;
+
+                                size = Helper.SizeOfType(m.pr.out_signals[j].data_type);
+                                tempr2 = new byte[size];
+                                Array.Copy(data, num, tempr2, 0, size);
+                                m.pr.out_signals[j].ReInit(tempr2);
+
+                                j++;
+
+                                num += size;
+                            }
+                        }
+                        else
+                        {
+                            if (id - 1000000 > m.pr.out_signals.Count - 1)
+                            {
+                                num += data[num] + 1;
+                                continue;
+                            }
+
+                            num++;
+                            m.pr.out_signals[j].id = id;
+
+                            size = Helper.SizeOfType(m.pr.out_signals[j].data_type);
+                            tempr2 = new byte[size];
+                            Array.Copy(data, num, tempr2, 0, size);
+                            m.pr.out_signals[j].ReInit(tempr2);
+
+                            j++;
+
+                            num += size;
+                        }
+                    }
+                    // Выхода для ЦП или входа для модуля
+                    else
+                    {
+                        if (m.mod.name.StartsWith("TA91"))
+                        {
+                            if (id > 1000015)
+                            {
+                                num += data[num] + 1;
+                                continue;
+                            }
+                        }
+                        else
+                        {
+                            if (id - 1000000 > m.pr.out_signals.Count - 1)
+                            {
+                                num += data[num] + 1;
+                                continue;
+                            }
+                        }
+
+                        num++;
+                        m.pr.in_signals[i].id = id;
+
+                        size = Helper.SizeOfType(m.pr.in_signals[i].data_type);
+                        tempr2 = new byte[size];
+                        Array.Copy(data, num, tempr2, 0, size);
+                        m.pr.in_signals[i].ReInit(tempr2);
+                        i++;
+                        num += size;
+                    }
+                }
+
+                if (m.mod.name.StartsWith("TA91"))
+                {
+                    foreach (byte[][] p in values)
+                    {
+                        Array.Copy(Helper.InvertArray(BitConverter.GetBytes(seq)), 0, tempr, ind, BitConverter.GetBytes(seq).Length);
+                        ind += BitConverter.GetBytes(seq).Length;
+
+                        Array.Copy(Helper.InvertArray(BitConverter.GetBytes(seq + 9)), 0, tempr, ind, BitConverter.GetBytes(seq).Length);
+                        ind += BitConverter.GetBytes(seq++).Length;
+
+                        for (int n = 0; n < 12; n++)
+                        {
+                            Array.Copy(p[n], 0, tempr, ind, 4);
+                            ind += 4;
+
+                            Array.Copy(BitConverter.GetBytes(Single.Parse(m.pr.out_signals[n].children[2].value)), 0, tempr, ind, 4);
+                            ind += 4;
+                        }
+
+                        Array.Copy(BitConverter.GetBytes(Single.Parse(m.pr.out_signals[12].children[2].value)), 0, tempr, ind, 4);
+                        ind += 4;
+
+                        arr = new byte[ind];
+                        Array.Copy(tempr, 0, arr, 0, ind);
+
+                        writer.Write(arr);
+
+                        ind = 0;
+                    }
+                }
+            }
+            else 
+            {
+                if (m.dr.f_reset_ring_buffer == false)
+                {
+                    lock (locker)
+                    {
+                        m.dr.f_reset_ring_buffer = true;
+                        m.dr.f_enable_write_data = true;
+                    }
+                }
+
+
+                if (writer != null)
+                {
+
+                    if (cfg != null)
+                        fStream.Write(cfg);
+                    writer.Close();
+                    fStream.Close();
+                    writer = null;
+                    fStream = null;
+                    cfg = null;
+                }
+
+                while (forever)
+                {
+                    if (num > data.Length) break;
+
+                    // Идентификационный номер сигнала
+                    id = BitConverter.ToUInt32(data, num);
+                    num += 4;
+
+                    if (id == 0) break;
+
+                    // Входа модуля
+                    if (id > 1000000)
+                    {
+                        if (id - 1000000 > m.pr.out_signals.Count)
+                        {
+                            num += data[num] + 1;
+                            continue;
+                        }
+                        num++;
+                        if (id == 1000015)
+                            j++;
+
+                        m.pr.out_signals[j].id = id;
+
+                        size = Helper.SizeOfType(m.pr.out_signals[j].data_type);
+                        tempr2 = new byte[size];
+                        Array.Copy(data, num, tempr2, 0, size);
+                        m.pr.out_signals[j].ReInit(tempr2);
+                        if (id != 1000014)
+                            j++;
+                        num += size;
+                    }
+                    // Выхода модуля
+                    else
+                    {
+                        if (id > m.pr.in_signals.Count)
+                        {
+                            num += data[num] + 1;
+                            continue;
+                        }
+                        num++;
+                        m.pr.in_signals[i].id = id;
+
+                        size = Helper.SizeOfType(m.pr.in_signals[i].data_type);
+                        tempr2 = new byte[size];
+                        Array.Copy(data, num, tempr2, 0, size);
+                        m.pr.in_signals[i].ReInit(tempr2);
+                        i++;
+                        num += size;
+                    }
+                }
+            }
+
+            OnPropChanged("in_signals");
+            OnPropChanged("out_signals");
+            
+        }
+    }
+
+    public class Signal : INotifyPropertyChanged
+    {
+        #region INotifyPropertyChanged Members
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        private void OnPropChanged(string propName)
+        {
+            if (this.PropertyChanged != null) this.PropertyChanged(this, new PropertyChangedEventArgs(propName));
+        }
+        #endregion // INotifyPropertyChanged Members
+
+        public string name;
+        public DataStruct signal { get; set; } = new DataStruct();
+    }
+
+    // Сигнал
+    public class DataStruct : INotifyPropertyChanged
+    {
+        #region INotifyPropertyChanged Members
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        private void OnPropChanged(string propName)
+        {
+            if (this.PropertyChanged != null) this.PropertyChanged(this, new PropertyChangedEventArgs(propName));
+        }
+        #endregion // INotifyPropertyChanged Members
+
+        public UInt32 id;
+        public byte len;
+        public SignalStruct signal { get; set; } = new SignalStruct();
+    }
+
+    // Сигнал
+    public class SignalStruct : INotifyPropertyChanged
+    {
+        #region INotifyPropertyChanged Members
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        private void OnPropChanged(string propName)
+        {
+            if (this.PropertyChanged != null) this.PropertyChanged(this, new PropertyChangedEventArgs(propName));
+        }
+        #endregion // INotifyPropertyChanged Members
+
+        public byte stat;
+        public int val
+        {
+            get;
+            set;
+        }
+        public byte time_type;
+        public UInt32 time1;
+        public UInt32 time2;
+    }
+
+    public class _int
+    {
+        public int i
+        {
+            get;
+            set;
+        }
+    }
+}

@@ -1,0 +1,26 @@
+﻿<Window x:Class="checkmod.ColdReset"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:Validation="clr-namespace:checkmod.ValidationRules"
+        xmlns:Res="clr-namespace:checkmod.Properties"
+        xmlns:local="clr-namespace:checkmod"
+        mc:Ignorable="d"
+        Title="ColdReset" ResizeMode="NoResize" SizeToContent="WidthAndHeight">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" HorizontalAlignment="Center" Margin="10">
+            <TextBlock Text="{x:Static Res:Resources.CommonColdReset}" Margin="10,20,10,0" FontSize="14" HorizontalAlignment="Center" TextAlignment="Center" ></TextBlock>
+
+            <StackPanel HorizontalAlignment="Center" Orientation="Horizontal" Width="300" Margin="0,50,0,0">
+                <Button x:Name="Apply" HorizontalAlignment="Left" Width="80" Height="25" Content="{x:Static Res:Resources.Apply}" Click="Aplly_Click"></Button>
+                <Button x:Name="Cancel" HorizontalAlignment="Right" Margin="140,0,0,0" Width="80" Height="25" Content="{x:Static Res:Resources.Cancel}" Click="Cancel_Click"></Button>
+            </StackPanel>
+            
+        </StackPanel>
+    </Grid>
+</Window>

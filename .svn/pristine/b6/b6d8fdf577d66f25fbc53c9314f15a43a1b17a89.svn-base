@@ -1,0 +1,154 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace checkmod
+{
+    class Helper
+    {
+        static public PLC plc { get; set; }
+
+        // Возвращает размер типа данных указанный в XML
+        static public byte SizeOfType(string type)
+        {
+            return plc.DataTypes.Single(x => (x.name == type)).size;
+        }
+
+        //Возвращает минимальное и максимальное значение параметра
+        static public MinMax MinMaxOfType(string type)
+        {
+            switch (type)
+            {
+                case "BYTE":
+                    return new MinMax(byte.MinValue.ToString(), byte.MaxValue.ToString());
+
+                case "USINT":
+                    return new MinMax(byte.MinValue.ToString(), byte.MaxValue.ToString());
+
+                case "INT":
+                    return new MinMax(Int16.MinValue.ToString(), Int16.MaxValue.ToString());
+
+                case "UINT":
+                    return new MinMax(UInt16.MinValue.ToString(), UInt16.MaxValue.ToString());
+
+                case "DINT":
+                    return new MinMax(Int32.MinValue.ToString(), Int32.MaxValue.ToString());
+
+                case "UDINT":
+                    return new MinMax(UInt32.MinValue.ToString(), UInt32.MaxValue.ToString());
+
+                case "ULINT":
+                    return new MinMax(UInt64.MinValue.ToString(), UInt64.MaxValue.ToString());
+
+                case "LINT":
+                    return new MinMax(Int64.MinValue.ToString(), Int64.MaxValue.ToString());
+
+                case "FLOAT":
+                    return new MinMax(float.MinValue.ToString(), float.MaxValue.ToString());
+
+                default:
+                    return new MinMax(Int64.MinValue.ToString(), Int64.MaxValue.ToString());
+            }
+        }
+
+        // Возврат значения
+        static public string GetString(string type, byte[] value)
+        {
+            switch (type)
+            {
+                case "BYTE":
+                    return value[0].ToString();
+
+                case "USINT":
+                    return value[0].ToString();
+
+                case "INT":
+                    return BitConverter.ToInt16(value, 0).ToString();
+
+                case "UINT":
+                    return BitConverter.ToUInt16(value, 0).ToString();
+
+                case "DINT":
+                    return BitConverter.ToInt32(value, 0).ToString();
+
+                case "UDINT":
+                    return BitConverter.ToUInt32(value, 0).ToString();
+
+                case "ULINT":
+                    return BitConverter.ToUInt64(value, 0).ToString();
+
+                case "LINT":
+                    return BitConverter.ToInt64(value, 0).ToString();
+
+                case "FLOAT":
+                    return BitConverter.ToSingle(value, 0).ToString();
+
+                default:
+                    return string.Empty;
+            }
+        }
+
+        // Возврат значения
+        static public byte[] GetBytes(string type, string value)
+        {
+            switch (type)
+            {
+                case "BYTE":
+                    return new byte[] { byte.Parse(value) };
+
+                case "USINT":
+                    return new byte[] { byte.Parse(value) };
+
+                case "INT":
+                    return BitConverter.GetBytes(Int16.Parse(value));
+
+                case "UINT":
+                    return BitConverter.GetBytes(UInt16.Parse(value));
+
+                case "DINT":
+                    return BitConverter.GetBytes(Int32.Parse(value));
+
+                case "UDINT":
+                    return BitConverter.GetBytes(UInt32.Parse(value));
+
+                case "ULINT":
+                    return BitConverter.GetBytes(UInt64.Parse(value));
+
+                case "LINT":
+                    return BitConverter.GetBytes(Int64.Parse(value));
+
+                case "FLOAT":
+                    return BitConverter.GetBytes(Single.Parse(value));
+
+                default:
+                    return null;
+            }
+        }
+
+        static public byte[] ReformatArray(string value)
+        {
+            string str;
+            byte[] arr = new byte[value.Length / 2];
+            for (int i = 0; i < value.Length / 2; i++)
+            {
+                str = value.Substring(i * 2, 2);
+                arr[i] = Convert.ToByte(str, 16);
+            }
+            return arr;
+        }
+    }
+
+    public class MinMax
+    {
+        public string min;
+        public string max;
+
+        public MinMax(string min, string max)
+        {
+            this.min = min;
+            this.max = max;
+        }
+    }
+}

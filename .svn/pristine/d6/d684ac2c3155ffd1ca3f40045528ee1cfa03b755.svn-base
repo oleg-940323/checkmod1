@@ -1,0 +1,1231 @@
+﻿using checkmod.TreeGrid;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Xml.Serialization;
+
+namespace checkmod
+{
+
+
+    // Примечание. Для запуска созданного кода может потребоваться NET Framework версии 4.5 или более поздней версии и .NET Core или Standard версии 2.0 или более поздней.
+    /// <remarks/>
+    [System.SerializableAttribute()]
+    [System.ComponentModel.DesignerCategoryAttribute("code")]
+    [System.Xml.Serialization.XmlTypeAttribute(AnonymousType = true)]
+    [System.Xml.Serialization.XmlRootAttribute(Namespace = "", IsNullable = false)]
+    public partial class PLC
+    {
+
+        private PLCDataType[] dataTypesField;
+
+        private PLCCommonConfig commonConfigField;
+
+        private PLCModule[] hWModulesField;
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlArrayItemAttribute("DataType", IsNullable = false)]
+        public PLCDataType[] DataTypes
+        {
+            get
+            {
+                return this.dataTypesField;
+            }
+            set
+            {
+                this.dataTypesField = value;
+            }
+        }
+
+        /// <remarks/>
+        public PLCCommonConfig CommonConfig
+        {
+            get
+            {
+                return this.commonConfigField;
+            }
+            set
+            {
+                this.commonConfigField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlArrayItemAttribute("Module", IsNullable = false)]
+        public PLCModule[] HWModules
+        {
+            get
+            {
+                return this.hWModulesField;
+            }
+            set
+            {
+                this.hWModulesField = value;
+            }
+        }
+    }
+
+    /// <remarks/>
+    [System.SerializableAttribute()]
+    [System.ComponentModel.DesignerCategoryAttribute("code")]
+    [System.Xml.Serialization.XmlTypeAttribute(AnonymousType = true)]
+    public partial class PLCDataType
+    {
+
+        private PLCDataTypeElement[] elementField;
+
+        private string nameField;
+
+        private byte sizeField;
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlElementAttribute("Element")]
+        public PLCDataTypeElement[] Element
+        {
+            get
+            {
+                return this.elementField;
+            }
+            set
+            {
+                this.elementField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public string name
+        {
+            get
+            {
+                return this.nameField;
+            }
+            set
+            {
+                this.nameField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public byte size
+        {
+            get
+            {
+                return this.sizeField;
+            }
+            set
+            {
+                this.sizeField = value;
+            }
+        }
+    }
+
+    /// <remarks/>
+    [System.SerializableAttribute()]
+    [System.ComponentModel.DesignerCategoryAttribute("code")]
+    [System.Xml.Serialization.XmlTypeAttribute(AnonymousType = true)]
+    public partial class PLCDataTypeElement
+    {
+
+        private string nameField;
+
+        private string datatypeField;
+
+        private string descriptionField;
+
+        private string discriptionField;
+
+        private sbyte minField;
+
+        private bool minFieldSpecified;
+
+        private byte maxField;
+
+        private bool maxFieldSpecified;
+
+        private string valueField;
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public string name
+        {
+            get
+            {
+                return this.nameField;
+            }
+            set
+            {
+                this.nameField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public string datatype
+        {
+            get
+            {
+                return this.datatypeField;
+            }
+            set
+            {
+                this.datatypeField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public string description
+        {
+            get
+            {
+                return this.descriptionField;
+            }
+            set
+            {
+                this.descriptionField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public string discription
+        {
+            get
+            {
+                return this.discriptionField;
+            }
+            set
+            {
+                this.discriptionField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public sbyte min
+        {
+            get
+            {
+                return this.minField;
+            }
+            set
+            {
+                this.minField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlIgnoreAttribute()]
+        public bool minSpecified
+        {
+            get
+            {
+                return this.minFieldSpecified;
+            }
+            set
+            {
+                this.minFieldSpecified = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public byte max
+        {
+            get
+            {
+                return this.maxField;
+            }
+            set
+            {
+                this.maxField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlIgnoreAttribute()]
+        public bool maxSpecified
+        {
+            get
+            {
+                return this.maxFieldSpecified;
+            }
+            set
+            {
+                this.maxFieldSpecified = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlTextAttribute()]
+        public string Value
+        {
+            get
+            {
+                return this.valueField;
+            }
+            set
+            {
+                this.valueField = value;
+            }
+        }
+    }
+
+    /// <remarks/>
+    [System.SerializableAttribute()]
+    [System.ComponentModel.DesignerCategoryAttribute("code")]
+    [System.Xml.Serialization.XmlTypeAttribute(AnonymousType = true)]
+    public partial class PLCCommonConfig
+    {
+
+        private string nameField;
+
+        private string versionField;
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public string name
+        {
+            get
+            {
+                return this.nameField;
+            }
+            set
+            {
+                this.nameField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public string version
+        {
+            get
+            {
+                return this.versionField;
+            }
+            set
+            {
+                this.versionField = value;
+            }
+        }
+    }
+
+    /// <remarks/>
+    [System.SerializableAttribute()]
+    [System.ComponentModel.DesignerCategoryAttribute("code")]
+    [System.Xml.Serialization.XmlTypeAttribute(AnonymousType = true)]
+    public partial class PLCModule
+    {
+
+        private PLCModuleGoose[] goosesField;
+
+        private PLCModuleSampledValue[] sampledValuesField;
+
+        private PLCModuleSection[] parametersField;
+
+        private byte idField;
+
+        private byte moduletypeField;
+
+        private string implementationField;
+
+        private string nameField;
+
+        private string versionField;
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlArrayItemAttribute("Goose", IsNullable = false)]
+        public PLCModuleGoose[] Gooses
+        {
+            get
+            {
+                return this.goosesField;
+            }
+            set
+            {
+                this.goosesField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlArrayItemAttribute("SampledValue", IsNullable = false)]
+        public PLCModuleSampledValue[] SampledValues
+        {
+            get
+            {
+                return this.sampledValuesField;
+            }
+            set
+            {
+                this.sampledValuesField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlArrayItemAttribute("Section", IsNullable = false)]
+        public PLCModuleSection[] Parameters
+        {
+            get
+            {
+                return this.parametersField;
+            }
+            set
+            {
+                this.parametersField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public byte id
+        {
+            get
+            {
+                return this.idField;
+            }
+            set
+            {
+                this.idField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public byte moduletype
+        {
+            get
+            {
+                return this.moduletypeField;
+            }
+            set
+            {
+                this.moduletypeField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public string implementation
+        {
+            get
+            {
+                return this.implementationField;
+            }
+            set
+            {
+                this.implementationField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public string name
+        {
+            get
+            {
+                return this.nameField;
+            }
+            set
+            {
+                this.nameField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public string version
+        {
+            get
+            {
+                return this.versionField;
+            }
+            set
+            {
+                this.versionField = value;
+            }
+        }
+    }
+
+    /// <remarks/>
+    [System.SerializableAttribute()]
+    [System.ComponentModel.DesignerCategoryAttribute("code")]
+    [System.Xml.Serialization.XmlTypeAttribute(AnonymousType = true)]
+    public partial class PLCModuleGoose
+    {
+
+        private string dest_MACField;
+
+        private string src_MACField;
+
+        private string ipField;
+
+        private string aPP_IDField;
+
+        private string gocbRefField;
+
+        private string datSetField;
+
+        private string goIDField;
+
+        private string confRevField;
+
+        private string idField;
+
+        /// <remarks/>
+        public string Dest_MAC
+        {
+            get
+            {
+                return this.dest_MACField;
+            }
+            set
+            {
+                this.dest_MACField = value;
+            }
+        }
+
+        /// <remarks/>
+        public string Src_MAC
+        {
+            get
+            {
+                return this.src_MACField;
+            }
+            set
+            {
+                this.src_MACField = value;
+            }
+        }
+
+        /// <remarks/>
+        public string IP
+        {
+            get
+            {
+                return this.ipField;
+            }
+            set
+            {
+                this.ipField = value;
+            }
+        }
+
+        /// <remarks/>
+        public string APP_ID
+        {
+            get
+            {
+                return this.aPP_IDField;
+            }
+            set
+            {
+                this.aPP_IDField = value;
+            }
+        }
+
+        /// <remarks/>
+        public string gocbRef
+        {
+            get
+            {
+                return this.gocbRefField;
+            }
+            set
+            {
+                this.gocbRefField = value;
+            }
+        }
+
+        /// <remarks/>
+        public string datSet
+        {
+            get
+            {
+                return this.datSetField;
+            }
+            set
+            {
+                this.datSetField = value;
+            }
+        }
+
+        /// <remarks/>
+        public string goID
+        {
+            get
+            {
+                return this.goIDField;
+            }
+            set
+            {
+                this.goIDField = value;
+            }
+        }
+
+        /// <remarks/>
+        public string confRev
+        {
+            get
+            {
+                return this.confRevField;
+            }
+            set
+            {
+                this.confRevField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public string id
+        {
+            get
+            {
+                return this.idField;
+            }
+            set
+            {
+                this.idField = value;
+            }
+        }
+    }
+
+    /// <remarks/>
+    [System.SerializableAttribute()]
+    [System.ComponentModel.DesignerCategoryAttribute("code")]
+    [System.Xml.Serialization.XmlTypeAttribute(AnonymousType = true)]
+    public partial class PLCModuleSampledValue
+    {
+
+        private string dest_MACField;
+
+        private string src_MACField;
+
+        private string ipField;
+
+        private string aPP_IDField;
+
+        private string msvIDField;
+
+        private string datSetField;
+
+        private string confRevField;
+
+        private string idField;
+
+        /// <remarks/>
+        public string Dest_MAC
+        {
+            get
+            {
+                return this.dest_MACField;
+            }
+            set
+            {
+                this.dest_MACField = value;
+            }
+        }
+
+        /// <remarks/>
+        public string Src_MAC
+        {
+            get
+            {
+                return this.src_MACField;
+            }
+            set
+            {
+                this.src_MACField = value;
+            }
+        }
+
+        /// <remarks/>
+        public string IP
+        {
+            get
+            {
+                return this.ipField;
+            }
+            set
+            {
+                this.ipField = value;
+            }
+        }
+
+        /// <remarks/>
+        public string APP_ID
+        {
+            get
+            {
+                return this.aPP_IDField;
+            }
+            set
+            {
+                this.aPP_IDField = value;
+            }
+        }
+
+        /// <remarks/>
+        public string MsvID
+        {
+            get
+            {
+                return this.msvIDField;
+            }
+            set
+            {
+                this.msvIDField = value;
+            }
+        }
+
+        /// <remarks/>
+        public string datSet
+        {
+            get
+            {
+                return this.datSetField;
+            }
+            set
+            {
+                this.datSetField = value;
+            }
+        }
+
+        /// <remarks/>
+        public string confRev
+        {
+            get
+            {
+                return this.confRevField;
+            }
+            set
+            {
+                this.confRevField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public string id
+        {
+            get
+            {
+                return this.idField;
+            }
+            set
+            {
+                this.idField = value;
+            }
+        }
+    }
+
+    /// <remarks/>
+    [System.SerializableAttribute()]
+    [System.ComponentModel.DesignerCategoryAttribute("code")]
+    [System.Xml.Serialization.XmlTypeAttribute(AnonymousType = true)]
+    public partial class PLCModuleSection
+    {
+
+        private PLCModuleSectionParameter[] parameterField;
+
+        private string nameField;
+
+        private string descriptionField;
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlElementAttribute("Parameter")]
+        public PLCModuleSectionParameter[] Parameter
+        {
+            get
+            {
+                return this.parameterField;
+            }
+            set
+            {
+                this.parameterField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public string name
+        {
+            get
+            {
+                return this.nameField;
+            }
+            set
+            {
+                this.nameField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public string description
+        {
+            get
+            {
+                return this.descriptionField;
+            }
+            set
+            {
+                this.descriptionField = value;
+            }
+        }
+    }
+
+    /// <remarks/>
+    [System.SerializableAttribute()]
+    [System.ComponentModel.DesignerCategoryAttribute("code")]
+    [System.Xml.Serialization.XmlTypeAttribute(AnonymousType = true)]
+    public partial class PLCModuleSectionParameter
+    {
+
+        private string nameField;
+
+        private string descriptionField;
+
+        private PLCModuleSectionParameterValue valueField;
+
+        private string referenceField;
+
+        private string functionField;
+
+        private string tSTypeField;
+
+        private string defaultField;
+
+        private string minField;
+
+        private string maxField;
+
+        private string parameterTypeField;
+
+        private string datatypeField;
+
+        private uint idField;
+
+        private string onlineaccessField;
+
+        private string offlineaccessField;
+
+        private string parametertypeField;
+
+        /// <remarks/>
+        public string Name
+        {
+            get
+            {
+                return this.nameField;
+            }
+            set
+            {
+                this.nameField = value;
+            }
+        }
+
+        /// <remarks/>
+        public string Description
+        {
+            get
+            {
+                return this.descriptionField;
+            }
+            set
+            {
+                this.descriptionField = value;
+            }
+        }
+
+        /// <remarks/>
+        public PLCModuleSectionParameterValue Value
+        {
+            get
+            {
+                return this.valueField;
+            }
+            set
+            {
+                this.valueField = value;
+            }
+        }
+
+        /// <remarks/>
+        public string Reference
+        {
+            get
+            {
+                return this.referenceField;
+            }
+            set
+            {
+                this.referenceField = value;
+            }
+        }
+
+        /// <remarks/>
+        public string Function
+        {
+            get
+            {
+                return this.functionField;
+            }
+            set
+            {
+                this.functionField = value;
+            }
+        }
+
+        /// <remarks/>
+        public string TSType
+        {
+            get
+            {
+                return this.tSTypeField;
+            }
+            set
+            {
+                this.tSTypeField = value;
+            }
+        }
+
+        /// <remarks/>
+        public string Default
+        {
+            get
+            {
+                return this.defaultField;
+            }
+            set
+            {
+                this.defaultField = value;
+            }
+        }
+
+        /// <remarks/>
+        public string Min
+        {
+            get
+            {
+                return this.minField;
+            }
+            set
+            {
+                this.minField = value;
+            }
+        }
+
+        /// <remarks/>
+        public string Max
+        {
+            get
+            {
+                return this.maxField;
+            }
+            set
+            {
+                this.maxField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public string ParameterType
+        {
+            get
+            {
+                return this.parameterTypeField;
+            }
+            set
+            {
+                this.parameterTypeField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public string datatype
+        {
+            get
+            {
+                return this.datatypeField;
+            }
+            set
+            {
+                this.datatypeField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public uint id
+        {
+            get
+            {
+                return this.idField;
+            }
+            set
+            {
+                this.idField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public string onlineaccess
+        {
+            get
+            {
+                return this.onlineaccessField;
+            }
+            set
+            {
+                this.onlineaccessField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public string offlineaccess
+        {
+            get
+            {
+                return this.offlineaccessField;
+            }
+            set
+            {
+                this.offlineaccessField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public string parametertype
+        {
+            get
+            {
+                return this.parametertypeField;
+            }
+            set
+            {
+                this.parametertypeField = value;
+            }
+        }
+    }
+
+    /////////////////// Не удалять!!! ////////////////////
+    /// <remarks/>
+    [System.SerializableAttribute()]
+    [System.ComponentModel.DesignerCategoryAttribute("code")]
+    [System.Xml.Serialization.XmlTypeAttribute(AnonymousType = true)]
+    public partial class PLCModuleSectionParameterValue
+    {
+
+        private PLCModuleSectionParameterValueElement[] elementField;
+
+        private string[] textField;
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlElementAttribute("Element")]
+        public PLCModuleSectionParameterValueElement[] Element
+        {
+            get
+            {
+                return this.elementField;
+            }
+            set
+            {
+                this.elementField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlTextAttribute()]
+        public string[] Text
+        {
+            get
+            {
+                return this.textField;
+            }
+            set
+            {
+                this.textField = value;
+            }
+        }
+    }
+
+    /// <remarks/>
+    [System.SerializableAttribute()]
+    [System.ComponentModel.DesignerCategoryAttribute("code")]
+    [System.Xml.Serialization.XmlTypeAttribute(AnonymousType = true)]
+    public partial class PLCModuleSectionParameterValueElement
+    {
+
+        private PLCModuleSectionParameterValueElement[] elementField;
+
+        private string[] textField;
+
+        private string nameField;
+
+        private string datatypeField;
+
+        private string descriptionField;
+
+        private string minField;
+
+        private string maxField;
+
+        private string optionsField;
+
+        private string onlineaccessField;
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlElementAttribute("Element")]
+        public PLCModuleSectionParameterValueElement[] Element
+        {
+            get
+            {
+                return this.elementField;
+            }
+            set
+            {
+                this.elementField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlTextAttribute()]
+        public string[] Text
+        {
+            get
+            {
+                return this.textField;
+            }
+            set
+            {
+                this.textField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public string name
+        {
+            get
+            {
+                return this.nameField;
+            }
+            set
+            {
+                this.nameField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public string datatype
+        {
+            get
+            {
+                return this.datatypeField;
+            }
+            set
+            {
+                this.datatypeField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public string description
+        {
+            get
+            {
+                return this.descriptionField;
+            }
+            set
+            {
+                this.descriptionField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public string min
+        {
+            get
+            {
+                return this.minField;
+            }
+            set
+            {
+                this.minField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public string max
+        {
+            get
+            {
+                return this.maxField;
+            }
+            set
+            {
+                this.maxField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public string onlineaccess
+        {
+            get
+            {
+                return this.onlineaccessField;
+            }
+            set
+            {
+                this.onlineaccessField = value;
+            }
+        }
+
+        /// <remarks/>
+        [System.Xml.Serialization.XmlAttributeAttribute()]
+        public string options
+        {
+            get
+            {
+                return this.optionsField;
+            }
+            set
+            {
+                this.optionsField = value;
+            }
+        }
+    }
+
+    
+    public partial class PLCModuleSectionParameterValueElement
+    {
+        private byte _size = 0;
+
+        [XmlIgnore]
+        public byte size
+        {
+            get
+            {
+                if (_size == 0)
+                    _size = Helper.SizeOfType(datatype);
+                return _size;
+            }
+        }
+    }
+}

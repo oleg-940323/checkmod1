@@ -1,0 +1,1386 @@
+﻿using checkmod.TreeGrid;
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Linq;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System.Threading.Tasks;
+
+
+namespace checkmod
+{
+
+    public class TypeParam : INotifyPropertyChanged
+    {
+        #region INotifyPropertyChanged Members
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        public void OnPropChanged(string propName)
+        {
+            if (this.PropertyChanged != null) this.PropertyChanged(this, new PropertyChangedEventArgs(propName));
+        }
+        #endregion // INotifyPropertyChanged Members
+
+        public TypeParam(PLCModuleSectionParameter Parameter, byte[] value = null)
+        {
+            MinMax range = null;
+            this.name = Parameter.Name?.Trim('\'', '\"');
+            this.data_type = Parameter.datatype?.Trim('\'', '\"');
+            this.description = Parameter.Description?.Trim('\'', '\"');
+
+            if (!(string.IsNullOrEmpty(Parameter.Min) || string.IsNullOrEmpty(Parameter.Max)))
+            {
+                min = Parameter.Min?.Trim('\'', '\"');
+                max = Parameter.Max?.Trim('\'', '\"');
+            }
+            else
+            { 
+                range = Helper.MinMaxOfType(Parameter.datatype?.Trim('\'', '\"'));
+                min = range.min;
+                max = range.max;
+            }
+
+            if (Parameter.Value.Element == null)
+            { 
+                isEditable = true;
+                if (value == null)
+                    this.value = Parameter.Value.Text[0]?.Trim('\'', '\"');
+                else
+                    this.value = Encoding.ASCII.GetString(value).Trim('\'', '\"');
+            }
+            else
+            {
+                TypeParam child = null;
+                foreach (PLCModuleSectionParameterValueElement p in Parameter.Value.Element)
+                {
+                    if (p.Element == null)
+                        child = new TypeParam(p, Encoding.ASCII.GetBytes(p.Text[0]?.Trim('\'', '\"')));
+                    else
+                    {
+                        if (value == null)
+                            child = new TypeParam(p);
+                        else
+                            child = new TypeParam(p, value);
+                    }
+
+                    if (children == null)
+                        children = new ObservableCollection<TypeParam>();
+                    children.Add(child);
+                }
+            }
+        }
+
+        public TypeParam(PLCModuleSectionParameterValueElement Parameter, byte[] value = null)
+        {
+            MinMax range = null;
+            this.name = Parameter.name?.Trim('\'', '\"');
+            this.data_type = Parameter.datatype?.Trim('\'', '\"');
+            this.description = Parameter.description?.Trim('\'', '\"');
+
+            if (!(string.IsNullOrEmpty(Parameter.min) || string.IsNullOrEmpty(Parameter.max)))
+            {
+                min = Parameter.min?.Trim('\'', '\"');
+                max = Parameter.max?.Trim('\'', '\"');
+            }
+            else
+            {
+                range = Helper.MinMaxOfType(Parameter.datatype?.Trim('\'', '\"'));
+                min = range.min;
+                max = range.max;
+            }
+
+            if (Parameter.Element == null)
+            {
+                this.isEditable = true;
+                if (value == null)
+                    this.value = Parameter.Text[0]?.Trim('\'', '\"');
+                else
+                    this.value = Encoding.ASCII.GetString(value);
+            }
+                
+            else
+            {
+                byte s;
+                byte[] arr;
+                TypeParam child = null;
+
+                foreach (PLCModuleSectionParameterValueElement p in Parameter.Element)
+                {
+                    s = Helper.SizeOfType(p.datatype);
+                    arr = new byte[s];
+
+                    if (value == null)
+                        this.value = p.Text[0]?.Trim('\'', '\"');
+                    else
+                    { 
+                        Array.Copy(value, 0, arr, 0, s);
+                        Array.Copy(value, s, value, 0, value.Length - s);
+                        Array.Resize(ref value, value.Length - s);
+                        this.value = Encoding.ASCII.GetString(arr);
+                    }
+
+                    
+
+                    child = new TypeParam(p, value);
+                    if (children == null)
+                        children = new ObservableCollection<TypeParam>();
+                    children.Add(child);
+                }
+            }
+        }
+
+        public UpdateDelegate UPD = null;
+
+        public void ClearTempr()
+        {
+            if ((children != null) && (children.Count > 0))
+            {
+                foreach (TypeParam p in children)
+                {
+                    ClearSubTempr(p.children);
+                }
+            }
+            else
+            { 
+                tempr = null;
+                if (UPD != null)
+                    UPD();
+            }
+        }
+
+        public void ClearSubTempr(ObservableCollection<TypeParam> children)
+        {
+            if ((children != null) && (children.Count > 0))
+            {
+                foreach (TypeParam p in children)
+                {
+                    ClearSubTempr(p.children);
+                }
+            }
+            else
+            {
+                tempr = null;
+                if (UPD != null)
+                    UPD();
+            }
+        }
+
+        public byte[] SetValue()
+        {
+            byte[] temp, data = null;
+            int cnt = 0;
+            if ((children != null) && (children.Count > 0))
+            {
+                foreach (TypeParam p in children)
+                {
+                    temp = SetSubValue(p.children);
+                    cnt += temp.Length;
+                    Array.Resize(ref data, cnt);
+                    Array.Copy(temp, 0, data, cnt, temp.Length);
+                }
+            }
+            else
+                data = Helper.GetBytes(data_type, tempr.Trim('\'', '\"'));
+            return data;
+        }
+
+        public byte[] SetSubValue(ObservableCollection<TypeParam> children)
+        {
+            byte[] temp, data = null;
+            int cnt = 0;
+
+            if ((children != null) && (children.Count > 0))
+            {
+                foreach (TypeParam p in children)
+                {
+
+                    temp = SetSubValue(p.children);
+                    cnt += temp.Length;
+                    Array.Resize(ref data, cnt);
+                    Array.Copy(temp, 0, data, cnt, temp.Length);
+                }
+
+            }
+            else
+                data = Helper.GetBytes(data_type, tempr.Trim('\'', '\"'));
+            return data;
+        }
+
+        public byte[] GetBytes()
+        {
+            byte[] tempr, data = null;
+            int cnt = 0, start = 0;
+            if ((children != null) && (children.Count > 0))
+            {
+                foreach (TypeParam p in children)
+                {
+                    tempr = GetSubByte(p);
+                    if (tempr == null)
+                        return null;
+                    cnt += tempr.Length;
+                    Array.Resize(ref data, cnt);
+                    Array.Copy(tempr, 0, data, start, tempr.Length);
+                    start = cnt;
+                }
+            }
+            else
+            {
+                if (string.IsNullOrEmpty(value))
+                    return null;
+                data = Helper.GetBytes(data_type, value.Trim('\'', '\"'));
+            }
+            return data;
+        }
+
+        public byte[] GetSubByte(TypeParam p)
+        {
+            byte[] tempr, data = null;
+            int cnt = 0, start = 0;
+
+            if ((p.children != null) && (p.children.Count > 0))
+            {
+                foreach (TypeParam pp in p.children)
+                {
+                    tempr = GetSubByte(pp);
+                    cnt += tempr.Length;
+                    Array.Resize(ref data, cnt);
+                    Array.Copy(tempr, 0, data, start, tempr.Length);
+                    start = cnt;
+                }
+            }
+            else
+            {
+                if (string.IsNullOrEmpty(p.value))
+                    return null;
+                data = Helper.GetBytes(p.data_type, p.value.Trim('\'', '\"'));// Encoding.ASCII.GetBytes(p.value.Trim('\'', '\"'));
+            }
+            return data;
+        }
+
+        // Вложенные элементы
+        public ObservableCollection<TypeParam> children { get; set; } = null;
+
+        // Минимальное значение
+        public string min { get; set; }
+
+        // Предустановленное значение
+        public string tempr { get; set; }
+
+        // Максимальное значение
+        public string max { get; set; }
+
+        // Возможность редактирования
+        public bool isEditable { get; set; } = false;
+
+        // Имя
+        public string name { get ; set; }
+
+        // Описание
+        public string description { get; set; }
+
+        // Тип данных
+        public string data_type { get; set; }
+
+        private string _value;
+        public string value 
+        {
+            get
+            {
+                return _value;
+            } 
+            set
+            {
+                _value = value;
+                if (UPD != null)
+                    UPD();
+                OnPropChanged("value");
+            }
+        }
+
+        // Индификатор параметра
+        public UInt32 id { get; set; }
+    }
+
+/*
+    public class IdentBase : INotifyPropertyChanged
+    {
+        #region INotifyPropertyChanged Members
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        public void OnPropChanged(string propName)
+        {
+            if (this.PropertyChanged != null) this.PropertyChanged(this, new PropertyChangedEventArgs(propName));
+        }
+        #endregion // INotifyPropertyChanged Members
+
+        public IdentBase(string name, string description, string data_type, string string_value = "")
+        {
+            this.name = name;
+            this.string_value = string_value;
+            this.data_type = data_type;
+            this.description = description;
+        }
+
+        public IdentBase(IdentBase p)
+        {
+            this.p = p;
+        }
+
+        public IdentBase p
+        {
+            get;
+            set;
+        }
+
+        // Имя
+        public string name { get; set; }
+
+        // Значение 
+        public string string_value { get; set; }
+
+        // Описание
+        public string description{ get; set; }
+
+        // Тип данных
+        public string data_type { get; set; }
+
+        *//*private ObservableCollection<IdentBase> _children = null;
+        public ObservableCollection<IdentBase> children 
+        {
+            get { return _children; }
+            set { _children = value; }
+        }*//*
+    }
+*/
+    public class DataGridElement : TreeGridElement, INotifyPropertyChanged
+    {
+        #region INotifyPropertyChanged Members
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        public void OnPropChanged(string propName)
+        {
+            if (this.PropertyChanged != null) this.PropertyChanged(this, new PropertyChangedEventArgs(propName));
+        }
+        #endregion // INotifyPropertyChanged Members
+
+        public DataGridElement(string name, string description, string data_type, string string_value = "", bool Haschildren = false)
+        {
+            this.name = name;
+            this.value = string_value;
+            this.data_type = data_type;
+            this.description = description;
+            HasChildren = Haschildren;
+        }
+        
+
+        public DataGridElement(TypeParam p, bool Haschildren = false)
+        {
+            this.p = p;
+            this.p.UPD = this.Update;
+            HasChildren = Haschildren;
+        }
+
+        public TypeParam p
+        {
+            get;
+            set;
+        }
+
+        public void Update()
+        {
+            OnPropChanged("value");
+            OnPropChanged("tempr");
+        }
+
+        // Имя
+        public string name { get { return p.name; } set { } }
+
+        // Значение 
+        public string value { get { return p.value; } set { p.value = value; } }
+
+        // Значение max
+        public string value_max { get { return p.max; }}
+
+        // Возможность редактирования
+        public bool isEditable { get { return p.isEditable; }}
+
+        // Предустановленное значение
+        public string tempr { get { return p.tempr; } set { p.tempr = value; } }
+
+        // Значение min 
+        public string value_min { get { return p.min; }}
+
+        // Описание
+        public string description { get { return p.description; } set { } }
+
+        // Тип данных
+        public string data_type { get { return p.data_type; } set { } }
+    }
+/*
+    public class IdentByte : IdentBase
+    {
+        public IdentByte(string name, byte val) :
+            base(name, "", "BYTE", val.ToString())
+        {
+            this.value = val;
+
+            value_min = byte.MinValue;
+            value_max = byte.MaxValue;
+        }
+
+        public IdentByte(string name, byte val, string description, string data_type) :
+            base(name, description, data_type, val.ToString())
+        {
+            this.value = val;
+
+            value_min = byte.MinValue;
+            value_max = byte.MaxValue;
+        }
+
+        public IdentByte(string name, byte val, byte value_min, byte value_max, string description, string data_type) : 
+            base(name, description, data_type, val.ToString())
+        {
+            this.value = val;
+            this.value_min = value_min;
+            this.value_max = value_max;
+        }
+
+        // Значение
+        private byte _value;
+        public byte value { get { return _value; } set { _value = value; base.OnPropChanged("value"); } }
+
+        // Минимальное значение
+        private byte _value_min;
+        public byte value_min { get { return _value_min; } set { _value_min = value; base.OnPropChanged("value"); } }
+
+        // Максимальное значение
+        private byte _value_max;
+        public byte value_max { get { return _value_max; } set { _value_max = value; base.OnPropChanged("value"); } }
+
+        // Временное значение
+        private string _tempr;
+        public string tempr { get { return _tempr; } set { _tempr = value; base.OnPropChanged("tempr"); } }
+
+        // Уникальный идентификатор
+        private UInt32 _id;
+        public UInt32 id { get { return _id; } set { _id = value; base.OnPropChanged("id"); } }
+    }
+
+    public class IdentString : IdentBase
+    {
+        public IdentString(string name, string val, string description, string data_type) :
+           base(name, description, data_type, val)
+        {
+            this.value = val;
+        }
+
+        public IdentString(string name, string val) :
+           base(name, "", "", val)
+        {
+            this.value = val;
+        }
+
+        // Тип
+        private string _value_type = "STRING";
+        public string value_type { get { return _value_type; } }
+
+        // Значение
+        private string _value;
+        public string value { get { return _value; } set { _value = value; base.OnPropChanged("value"); } }
+
+        // Временное значение
+        private string _tempr;
+        public string tempr { get { return _tempr; } set { _tempr = value; base.OnPropChanged("tempr"); } }
+
+        // Уникальный идентификатор
+        private UInt32 _id;
+        public UInt32 id { get { return _id; } set { _id = value; base.OnPropChanged("id"); } }
+    }
+
+    public class IdentInt : IdentBase
+    {
+        public IdentInt(string name, Int16 val, string description, string data_type) :
+            base(name, description, data_type, val.ToString())
+        {
+            this.value = val;
+
+            value_min = Int16.MinValue;
+            value_max = Int16.MaxValue;
+        }
+
+        public IdentInt(string name, Int16 val, Int16 value_min, Int16 value_max, string description, string data_type) :
+            base(name, description, data_type, val.ToString())
+        {
+            this.value = val;
+            this.value_min = value_min;
+            this.value_max = value_max;
+        }
+
+        // Тип
+        private string _value_type = "INT";
+        public string value_type { get { return _value_type; } }
+
+        // Значение
+        private Int16 _value;
+        public Int16 value { get { return _value; } set { _value = value; base.OnPropChanged("value"); } }
+
+        // Минимальное значение
+        private Int16 _value_min;
+        public Int16 value_min { get { return _value_min; } set { _value_min = value; base.OnPropChanged("value"); } }
+
+        // Максимальное значение
+        private Int16 _value_max;
+        public Int16 value_max { get { return _value_max; } set { _value_max = value; base.OnPropChanged("value"); } }
+
+        // Временное значение
+        private string _tempr;
+        public string tempr { get { return _tempr; } set { _tempr = value; base.OnPropChanged("tempr"); } }
+
+        // Уникальный идентификатор
+        private UInt32 _id;
+        public UInt32 id { get { return _id; } set { _id = value; base.OnPropChanged("id"); } }
+    }
+
+    public class IdentDint : IdentBase
+    {
+        public IdentDint(string name, Int32 val, string description, string data_type) :
+            base(name, description, data_type, val.ToString())
+        {
+            this.value = val;
+
+            value_min = Int32.MinValue;
+            value_max = Int32.MaxValue;
+        }
+
+        public IdentDint(string name, Int32 val, Int32 value_min, Int32 value_max, string description, string data_type) :
+            base(name, description, data_type, val.ToString())
+        {
+            this.value = val;
+            this.value_min = value_min;
+            this.value_max = value_max;
+        }
+
+        // Тип
+        private string _value_type = "DINT";
+        public string value_type { get { return _value_type; } }
+
+        // Значение
+        private Int32 _value;
+        public Int32 value { get { return _value; } set { _value = value; base.OnPropChanged("value"); } }
+
+        // Минимальное значение
+        private Int32 _value_min;
+        public Int32 value_min { get { return _value_min; } set { _value_min = value; base.OnPropChanged("value"); } }
+
+        // Максимальное значение
+        private Int32 _value_max;
+        public Int32 value_max { get { return _value_max; } set { _value_max = value; base.OnPropChanged("value"); } }
+
+        // Временное значение
+        private string _tempr;
+        public string tempr { get { return _tempr; } set { _tempr = value; base.OnPropChanged("tempr"); } }
+
+        // Уникальный идентификатор
+        private UInt32 _id;
+        public UInt32 id { get { return _id; } set { _id = value; base.OnPropChanged("id"); } }
+    }
+
+    public class IdentUint : IdentBase
+    {
+        public IdentUint(string name, UInt16 val, string description, string data_type) :
+            base(name, description, data_type, val.ToString())
+        {
+            this.value = val;
+
+            value_min = UInt16.MinValue;
+            value_max = UInt16.MaxValue;
+        }
+
+        public IdentUint(string name, UInt16 val, UInt16 value_min, UInt16 value_max, string description, string data_type) :
+            base(name, description, data_type, val.ToString())
+        {
+            this.value = val;
+            this.value_min = value_min;
+            this.value_max = value_max;
+        }
+
+        // Тип
+        private string _value_type = "UINT";
+        public string value_type { get { return _value_type; } }
+
+        // Значение
+        private UInt16 _value;
+        public UInt16 value { get { return _value; } set { _value = value; base.OnPropChanged("value"); } }
+
+        // Минимальное значение
+        private UInt16 _value_min;
+        public UInt16 value_min { get { return _value_min; } set { _value_min = value; base.OnPropChanged("value"); } }
+
+        // Максимальное значение
+        private UInt16 _value_max;
+        public UInt16 value_max { get { return _value_max; } set { _value_max = value; base.OnPropChanged("value"); } }
+
+        // Временное значение
+        private string _tempr;
+        public string tempr { get { return _tempr; } set { _tempr = value; base.OnPropChanged("tempr"); } }
+
+        // Уникальный идентификатор
+        private UInt32 _id;
+        public UInt32 id { get { return _id; } set { _id = value; base.OnPropChanged("id"); } }
+    }
+
+    public class IdentUdint : IdentBase
+    {
+        public IdentUdint(string name, UInt32 val, string description, string data_type) :
+            base(name, description, data_type, val.ToString())
+        {
+            this.value = val;
+
+            value_min = UInt32.MinValue;
+            value_max = UInt32.MaxValue;
+        }
+
+        public IdentUdint(string name, UInt32 val, UInt32 value_min, UInt32 value_max, string description, string data_type) :
+            base(name, description, data_type, val.ToString())
+        {
+            this.value = val;
+            this.value_min = value_min;
+            this.value_max = value_max;
+        }
+
+        // Тип
+        private string _value_type = "UDINT";
+        public string value_type { get { return _value_type; } }
+
+        // Значение
+        private UInt32 _value;
+        public UInt32 value { get { return _value; } set { _value = value; base.OnPropChanged("value"); } }
+
+        // Минимальное значение
+        private UInt32 _value_min;
+        public UInt32 value_min { get { return _value_min; } set { _value_min = value; base.OnPropChanged("value"); } }
+
+        // Максимальное значение
+        private UInt32 _value_max;
+        public UInt32 value_max { get { return _value_max; } set { _value_max = value; base.OnPropChanged("value"); } }
+
+        // Временное значение
+        private string _tempr;
+        public string tempr { get { return _tempr; } set { _tempr = value; base.OnPropChanged("tempr"); } }
+
+        // Уникальный идентификатор
+        private UInt32 _id;
+        public UInt32 id { get { return _id; } set { _id = value; base.OnPropChanged("id"); } }
+    }
+
+    public class IdentFloat : IdentBase
+    {
+        public IdentFloat(string name, float val, string description, string data_type) :
+            base(name, description, data_type, val.ToString())
+        {
+            this.value = val;
+
+            value_min = float.MinValue;
+            value_max = float.MaxValue;
+        }
+
+        public IdentFloat(string name, float val, float value_min, float value_max, string description, string data_type) :
+            base(name, description, data_type, val.ToString())
+        {
+            this.value = val;
+            this.value_min = value_min;
+            this.value_max = value_max;
+        }
+
+        // Тип
+        private string _value_type = "FLOAT";
+        public string value_type { get { return _value_type; } }
+
+        // Значение
+        private float _value;
+        public float value { get { return _value; } set { _value = value; base.OnPropChanged("value"); } }
+
+        // Минимальное значение
+        private float _value_min;
+        public float value_min { get { return _value_min; } set { _value_min = value; base.OnPropChanged("value"); } }
+
+        // Максимальное значение
+        private float _value_max;
+        public float value_max { get { return _value_max; } set { _value_max = value; base.OnPropChanged("value"); } }
+
+        // Временное значение
+        private string _tempr;
+        public string tempr { get { return _tempr; } set { _tempr = value; base.OnPropChanged("tempr"); } }
+
+        // Уникальный идентификатор
+        private UInt32 _id;
+        public UInt32 id { get { return _id; } set { _id = value; base.OnPropChanged("id"); } }
+    }
+
+    public class RMS_SIG_T : IdentBase
+    {
+        public RMS_SIG_T(string name, byte[] data, string description, string data_type) :
+            base(name, description, data_type, "", true)
+        {
+            pars(data);
+
+            value_min = float.MinValue;
+            value_max = float.MaxValue;
+        }
+
+        public RMS_SIG_T(string name, byte[] data, float value_min, float value_max, string description, string data_type) :
+            base(name, description, data_type, "", true)
+        {
+            pars(data);
+            this.value_min = value_min;
+            this.value_max = value_max;
+
+        }
+
+        // Тип
+        private string _value_type = "RMS_SIG_T";
+        public string value_type { get { return _value_type; } }
+
+        // Значение
+        private float _value;
+        public float value { get { return _value; } set { _value = value; base.OnPropChanged("value"); } }
+
+        // Минимальное значение
+        private float _value_min;
+        public float value_min { get { return _value_min; } set { _value_min = value; base.OnPropChanged("value"); } }
+
+        // Максимальное значение
+        private float _value_max;
+        public float value_max { get { return _value_max; } set { _value_max = value; base.OnPropChanged("value"); } }
+
+        // Временное значение
+        private string _tempr;
+        public string tempr { get { return _tempr; } set { _tempr = value; base.OnPropChanged("tempr"); } }
+
+        // Уникальный идентификатор
+        private UInt32 _id;
+        public UInt32 id { get { return _id; } set { _id = value; base.OnPropChanged("id"); } }
+
+        // Статус
+        private byte _stat;
+        public byte stat { get { return _stat; } set { _stat = value; base.OnPropChanged("stat"); } }
+
+        // Тип метки времени
+        private byte _timetype;
+        public byte timetype { get { return _timetype; } set { _timetype = value; base.OnPropChanged("timetype"); } }
+
+        // Тип метки времени
+        private UInt64 _time;
+        public UInt64 time { get { return _time; } set { _time = value; base.OnPropChanged("time"); } }
+
+        private void pars(byte[] data)
+        {
+            byte num = 0;
+
+            stat = data[num++];
+            timetype = data[num++];
+            value = BitConverter.ToSingle(data, num);
+
+            value_min = 0 - (value * (float)Math.Sqrt(2));
+            value_max = value * (float)Math.Sqrt(2);
+        }
+    }
+
+    public class TEMP_SIG_T : IdentBase
+    {
+        public TEMP_SIG_T(string name, byte[] data, string description, string data_type) :
+           base(name, description, data_type, "", true)
+        {
+            pars(data);
+
+            value_min = float.MinValue;
+            value_max = float.MaxValue;
+        }
+
+        public TEMP_SIG_T(string name, byte[] data, float value_min, float value_max, string description, string data_type) :
+            base(name, description, data_type, "", true)
+        {
+            pars(data);
+            this.value_min = value_min;
+            this.value_max = value_max;
+
+        }
+
+        byte[] data = null;
+
+        // Тип
+        private string _value_type = "TEMP_SIG_T";
+        public string value_type { get { return _value_type; } }
+
+        // Временное значение
+        private string _tempr;
+        public string tempr { get { return _tempr; } set { _tempr = value; base.OnPropChanged("tempr"); } }
+
+        // Значение
+        private float _value;
+        public float value { get { return _value; } set { _value = value; base.OnPropChanged("value"); } }
+
+        // Минимальное значение
+        private float _value_min;
+        public float value_min { get { return _value_min; } set { _value_min = value; base.OnPropChanged("value"); } }
+
+        // Максимальное значение
+        private float _value_max;
+        public float value_max { get { return _value_max; } set { _value_max = value; base.OnPropChanged("value"); } }
+
+        // Уникальный идентификатор
+        private UInt32 _id;
+        public UInt32 id { get { return _id; } set { _id = value; base.OnPropChanged("id"); } }
+
+        // Статус
+        private byte _stat;
+        public byte stat { get { return _stat; } set { _stat = value; base.OnPropChanged("stat"); } }
+
+        // Тип метки времени
+        private byte _timetype;
+        public byte timetype { get { return _timetype; } set { _timetype = value; base.OnPropChanged("timetype"); } }
+
+        // Тип метки времени
+        private UInt64 _time;
+        public UInt64 time { get { return _time; } set { _time = value; base.OnPropChanged("time"); } }
+
+        private void pars(byte[] buf)
+        {
+            byte num = 0;
+
+            stat = data[num++];
+            timetype = data[num++];
+            value = BitConverter.ToSingle(data, num);
+
+            value_min = float.MinValue;
+            value_max = float.MaxValue;
+        }
+    }
+
+    public class ADC_DATA_T : INotifyPropertyChanged
+    {
+        #region INotifyPropertyChanged Members
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        public void OnPropChanged(string propName)
+        {
+            if (this.PropertyChanged != null) this.PropertyChanged(this, new PropertyChangedEventArgs(propName));
+        }
+        #endregion // INotifyPropertyChanged Members
+
+        public ADC_DATA_T(byte fault_status, float value)
+        {
+            this.fault_status = fault_status;
+            this.value = value;
+        }
+
+        // Значение
+        private float _value;
+        public float value { get { return _value; } set { _value = value; OnPropChanged("value"); } }
+
+        // Временное значение
+        private string _tempr;
+        public string tempr { get { return _tempr; } set { _tempr = value; OnPropChanged("tempr"); } }
+
+        // Статус
+        private byte _fault_status;
+        public byte fault_status { get { return _fault_status; } set { _fault_status = value; OnPropChanged("fault_status"); } }
+    }
+
+    public class INSTVAL_SIG_T : IdentBase
+    {
+        public INSTVAL_SIG_T(string name, byte[] data, string description, string data_type) :
+           base(name, description, data_type, "", true)
+        {
+            pars(data);
+
+            value_min = float.MinValue;
+            value_max = float.MaxValue;
+        }
+
+        public INSTVAL_SIG_T(string name, byte[] data, float value_min, float value_max, string description, string data_type) :
+            base(name, description, data_type, "", true)
+        {
+            pars(data);
+            this.value_min = value_min;
+            this.value_max = value_max;
+
+        }
+
+        // Тип
+        private string _value_type = "INSTVAL_SIG_T";
+        public string value_type { get { return _value_type; } }
+
+        // Временное значение
+        private string _tempr;
+        public string tempr { get { return _tempr; } set { _tempr = value; base.OnPropChanged("tempr"); } }
+
+        // Значение
+        private ObservableCollection<ADC_DATA_T> _value = new ObservableCollection<ADC_DATA_T>();
+        public ObservableCollection<ADC_DATA_T> value { get { return _value; } set { _value = value; base.OnPropChanged("value"); } }
+
+        // Минимальное значение
+        private float _value_min = 0;
+        public float value_min { get { return _value_min; } set { _value_min = value; base.OnPropChanged("value"); } }
+
+        // Максимальное значение
+        private float _value_max = 0;
+        public float value_max { get { return _value_max; } set { _value_max = value; base.OnPropChanged("value"); } }
+
+        // Уникальный идентификатор
+        private UInt32 _id;
+        public UInt32 id { get { return _id; } set { _id = value; base.OnPropChanged("id"); } }
+
+        // Статус
+        private byte _stat;
+        public byte stat { get { return _stat; } set { _stat = value; base.OnPropChanged("stat"); } }
+
+        // Тип метки времени
+        private byte _timetype;
+        public byte timetype { get { return _timetype; } set { _timetype = value; base.OnPropChanged("timetype"); } }
+
+        // Метка времени
+        private UInt64 _time;
+        public UInt64 time { get { return _time; } set { _time = value; base.OnPropChanged("time"); } }
+
+        private void pars(byte[] buf)
+        {
+            byte num = 0;
+
+            stat = buf[num++];
+            timetype = buf[num++];
+
+            for (int i = 0; i < 12; i++)
+            {
+                if (value_min > BitConverter.ToSingle(buf, num + 1))
+                    value_min = BitConverter.ToSingle(buf, num + 1);
+
+                if (value_max < BitConverter.ToSingle(buf, num + 1))
+                    value_max = BitConverter.ToSingle(buf, num + 1);
+
+                value.Add(new ADC_DATA_T(buf[num++], BitConverter.ToSingle(buf, num)));
+                num += 4;
+            }
+        }
+    }
+
+    public class ERRORS_T : INotifyPropertyChanged
+    {
+        #region INotifyPropertyChanged Members
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        public void OnPropChanged(string propName)
+        {
+            if (this.PropertyChanged != null) this.PropertyChanged(this, new PropertyChangedEventArgs(propName));
+        }
+        #endregion // INotifyPropertyChanged Members
+
+        public ERRORS_T(UInt32 cnt)
+        {
+            this.cnt = cnt;
+        }
+
+        // Временное значение
+        private string _tempr;
+        public string tempr { get { return _tempr; } set { _tempr = value; OnPropChanged("tempr"); } }
+
+        // Счетчик ошибок АЦП
+        private UInt32 _cnt;
+        public UInt32 cnt { get { return _cnt; } set { _cnt = value; OnPropChanged("cnt"); } }
+    }
+
+    public class ERRORS_T2 : INotifyPropertyChanged
+    {
+        #region INotifyPropertyChanged Members
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        public void OnPropChanged(string propName)
+        {
+            if (this.PropertyChanged != null) this.PropertyChanged(this, new PropertyChangedEventArgs(propName));
+        }
+        #endregion // INotifyPropertyChanged Members
+
+        public ERRORS_T2(UInt32 AsicCrcErrCnt, UInt32 AsicDataErrCnt)
+        {
+            this.AsicCrcErrCnt = AsicCrcErrCnt;
+            this.AsicCrcErrCnt = AsicDataErrCnt;
+        }
+
+        // Временное значение
+        private string _tempr;
+        public string tempr { get { return _tempr; } set { _tempr = value; OnPropChanged("tempr"); } }
+
+        // Счетчик ошибок АЦП
+        private UInt32 _AsicCrcErrCnt;
+        public UInt32 AsicCrcErrCnt { get { return _AsicCrcErrCnt; } set { _AsicCrcErrCnt = value; OnPropChanged("AsicCrcErrCnt"); } }
+
+        // Счетчик ошибок АЦП
+        private UInt32 _AsicDataErrCnt;
+        public UInt32 AsicDataErrCnt { get { return _AsicDataErrCnt; } set { _AsicDataErrCnt = value; OnPropChanged("AsicDataErrCnt"); } }
+    }
+
+    public class ERRORS_SIG_T : IdentBase
+    {
+        public ERRORS_SIG_T(string name, byte[] data, string description, string data_type) :
+            base(name, description, data_type, "", true)
+        {
+            pars(data);
+        }
+
+        // Тип
+        private string _value_type = "ERRORS_SIG_T";
+        public string value_type { get { return _value_type; } }
+
+        // Временное значение
+        private string _tempr;
+        public string tempr { get { return _tempr; } set { _tempr = value; base.OnPropChanged("tempr"); } }
+
+        // Значение
+        private ERRORS_T _value;
+        public ERRORS_T value { get { return _value; } set { _value = value; base.OnPropChanged("value"); } }
+
+        // Минимальное значение
+        private UInt32 _value_min;
+        public UInt32 value_min { get { return _value_min; } set { _value_min = value; base.OnPropChanged("value_min"); } }
+
+        // Максимальное значение
+        private UInt32 _value_max;
+        public UInt32 value_max { get { return _value_max; } set { _value_max = value; base.OnPropChanged("value_max"); } }
+
+        // Уникальный идентификатор
+        private UInt32 _id;
+        public UInt32 id { get { return _id; } set { _id = value; base.OnPropChanged("id"); } }
+
+        // Статус
+        private byte _stat;
+        public byte stat { get { return _stat; } set { _stat = value; base.OnPropChanged("stat"); } }
+
+        // Тип метки времени
+        private byte _timetype;
+        public byte timetype { get { return _timetype; } set { _timetype = value; base.OnPropChanged("timetype"); } }
+
+        // Тип метки времени
+        private UInt64 _time;
+        public UInt64 time { get { return _time; } set { _time = value; base.OnPropChanged("time"); } }
+
+        private void pars(byte[] data)
+        {
+            byte num = 0;
+
+            stat = data[num++];
+            timetype = data[num++];
+            value.cnt = BitConverter.ToUInt32(data, num);
+            value_min = UInt32.MinValue;
+            value_max = UInt32.MaxValue;
+        }
+    }
+
+    public class ERRORS_SIG_T2 : IdentBase
+    {
+        public ERRORS_SIG_T2(string name, byte[] data, string description, string data_type) :
+        base(name, description, data_type, "", true)
+        {
+            pars(data);
+        }
+
+        // Тип
+        private string _value_type = "ERRORS_SIG_T2";
+        public string value_type { get { return _value_type; } }
+
+        // Временное значение
+        private string _tempr;
+        public string tempr { get { return _tempr; } set { _tempr = value; base.OnPropChanged("tempr"); } }
+
+        // Значение
+        private ERRORS_T2 _value = new ERRORS_T2(0,0);
+        public ERRORS_T2 value { get { return _value; } set { _value = value; base.OnPropChanged("value"); } }
+
+        // Минимальное значение
+        private UInt32 _value_min;
+        public UInt32 value_min { get { return _value_min; } set { _value_min = value; base.OnPropChanged("value_min"); } }
+
+        // Максимальное значение
+        private UInt32 _value_max;
+        public UInt32 value_max { get { return _value_max; } set { _value_max = value; base.OnPropChanged("value_max"); } }
+
+        // Уникальный идентификатор
+        private UInt32 _id;
+        public UInt32 id { get { return _id; } set { _id = value; base.OnPropChanged("id"); } }
+
+        // Статус
+        private byte _stat;
+        public byte stat { get { return _stat; } set { _stat = value; base.OnPropChanged("stat"); } }
+
+        // Тип метки времени
+        private byte _timetype;
+        public byte timetype { get { return _timetype; } set { _timetype = value; base.OnPropChanged("timetype"); } }
+
+        // Тип метки времени
+        private UInt64 _time;
+        public UInt64 time { get { return _time; } set { _time = value; base.OnPropChanged("time"); } }
+
+        private void pars(byte[] data)
+        {
+            byte num = 0;
+
+            stat = data[num++];
+            timetype = data[num++];
+            value.AsicCrcErrCnt = BitConverter.ToUInt32(data, num);
+            value.AsicDataErrCnt = BitConverter.ToUInt32(data, num);
+
+            value_min = UInt32.MinValue;
+            value_max = UInt32.MaxValue;
+        }
+    }
+
+    public class STRUCT_TIME : IdentBase
+    {
+        public STRUCT_TIME(string name, byte[] data, string description, string data_type) :
+           base(name, description, data_type, "", true)
+        {
+            pars(data);
+        }
+
+        // Тип
+        private string _value_type = "STRUCT_TIME";
+        public string value_type { get { return _value_type; } }
+
+        // Временное значение
+        private string _tempr;
+        public string tempr { get { return _tempr; } set { _tempr = value; base.OnPropChanged("tempr"); } }
+
+        // Время левой границы фильтра
+        private byte _Time_REdge;
+        public byte Time_REdge { get { return _Time_REdge; } set { _Time_REdge = value; base.OnPropChanged("Time_REdge"); } }
+
+        // Минимальное значение
+        private byte _value_min;
+        public byte value_min { get { return _value_min; } set { _value_min = value; base.OnPropChanged("value_min"); } }
+
+        // Максимальное значение
+        private byte _value_max;
+        public byte value_max { get { return _value_max; } set { _value_max = value; base.OnPropChanged("value_max"); } }
+
+        // Время правой границы фильтра
+        private byte _Time_FEdge;
+        public byte Time_FEdge { get { return _Time_FEdge; } set { _Time_FEdge = value; base.OnPropChanged("Time_FEdge"); } }
+
+        // Время отстройки сигнала
+        private byte _Time_Replc;
+        public byte Time_Replc { get { return _Time_Replc; } set { _Time_Replc = value; base.OnPropChanged("Time_Replc"); } }
+
+        // Уникальный идентификатор
+        private UInt32 _id;
+        public UInt32 id { get { return _id; } set { _id = value; base.OnPropChanged("id"); } }
+
+        private void pars(byte[] data)
+        {
+            byte num = 0;
+
+            Time_REdge = data[num++];
+            Time_FEdge = data[num++];
+            Time_Replc = data[num++];
+
+            if (data.Length > 3)
+            {
+                value_min = data[num++];
+                value_max = data[num++];
+            }
+            else
+            {
+                value_min = byte.MinValue;
+                value_max = byte.MaxValue;
+            }
+            
+        }
+    }
+
+    public class DSIGNAL_T : IdentBase
+    {
+        public DSIGNAL_T(string name, byte[] data, string description, string data_type) :
+        base(name, description, data_type, "", true)
+        {
+            pars(data);
+        }
+
+        // Тип
+        private string _value_type = "DSIGNAL_T";
+        public string value_type { get { return _value_type; } }
+
+        // Временное значение
+        private string _tempr;
+        public string tempr { get { return _tempr; } set { _tempr = value; base.OnPropChanged("tempr"); } }
+
+        // Значение
+        private UInt32 _value;
+        public UInt32 value { get { return _value; } set { _value = value; base.OnPropChanged("value"); } }
+
+        // Минимальное значение
+        private byte _value_min;
+        public byte value_min { get { return _value_min; } set { _value_min = value; base.OnPropChanged("value"); } }
+
+        // Максимальное значение
+        private byte _value_max;
+        public byte value_max { get { return _value_max; } set { _value_max = value; base.OnPropChanged("value"); } }
+
+        // Уникальный идентификатор
+        private UInt32 _id;
+        public UInt32 id { get { return _id; } set { _id = value; base.OnPropChanged("id"); } }
+
+        // Статус
+        private byte _stat;
+        public byte stat { get { return _stat; } set { _stat = value; base.OnPropChanged("stat"); } }
+
+        // Тип метки времени
+        private byte _timetype;
+        public byte timetype { get { return _timetype; } set { _timetype = value; base.OnPropChanged("timetype"); } }
+
+        // Тип метки времени
+        private UInt64 _time;
+        public UInt64 time { get { return _time; } set { _time = value; base.OnPropChanged("time"); } }
+
+        private void pars(byte[] data)
+        {
+            byte num = 0;
+
+            stat = data[num++];
+            timetype = data[num++];
+            value = BitConverter.ToUInt32(data, num);
+
+            value_min = 0;
+            value_max = 1;
+        }
+    }
+*/
+    public class pars : INotifyPropertyChanged
+    {
+        #region INotifyPropertyChanged Members
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        private void OnPropChanged(string propName)
+        {
+            if (this.PropertyChanged != null) this.PropertyChanged(this, new PropertyChangedEventArgs(propName));
+        }
+        #endregion // INotifyPropertyChanged Members
+
+        int i;
+        Driver dr;
+        public string plant_num;
+        string[] name_param = new string[9] { "Статус", "Позиция", "Тип модуля", "Имя модуля", "Имя программы",
+                                              "Исполнение модуля", "Версия программы" , "Аппаратная версия", "Заводской номер"};
+
+        public pars(Driver dr)
+        {
+            this.dr = dr;
+            _conf = new config(dr);
+            _sign = new Signals(dr);
+
+        }
+
+        // Коллекция, содержащая конфинурационные параметры
+        private ObservableCollection<TypeParam> _conf_param = new ObservableCollection<TypeParam>();
+        public ObservableCollection<TypeParam> conf_param
+        {
+            get { return _conf_param; }
+            set { _conf_param = value; }
+        }
+            
+        // Коллекция, содержащая входные сигналы
+        private ObservableCollection<TypeParam> _in_signals = new ObservableCollection<TypeParam>();
+        public ObservableCollection<TypeParam> in_signals
+        {
+            get { return _in_signals; }
+            set { _in_signals = value; }
+        }
+
+        // Коллекция, содержащая выходные сигналы
+        private ObservableCollection<TypeParam> _out_signals = new ObservableCollection<TypeParam>();
+        public ObservableCollection<TypeParam> out_signals
+        {
+            get { return _out_signals; }
+            set { _out_signals = value; }
+        }
+
+        private TreeGridModel _PS = new TreeGridModel();
+        public TreeGridModel PS
+        {
+            get { return _PS; }
+            set { _PS = value; }
+        }
+
+        public ObservableCollection<TypeParam> ident_collect { get; set; }
+
+        // Свойство имени закладки
+        private string header = "Empty";
+        public string full_name 
+        {
+            get 
+            {
+                return header;
+            }
+            
+        }
+
+        // Сигналы
+        private Signals _sign;
+        public Signals sign
+        {
+            get => _sign;
+        }
+
+        // Конфигурация
+        private config _conf;
+        public config conf
+        {
+            get => _conf;
+        }
+
+         
+
+        // метод поиска и проверки строкового параметра 
+        public void check(byte[] data, IPAddress ip)
+        {
+            byte[] tempr;
+            PLCModuleSectionParameter param = null;
+            ident_collect = new ObservableCollection<TypeParam>();
+            PLCModuleSectionParameterValue element = new PLCModuleSectionParameterValue();
+            for (int h = 0; h < 3; h++)
+            {
+                param = new PLCModuleSectionParameter();
+                param.Name = name_param[h];
+                param.datatype = "BYTE";
+                param.Value = element;
+                ident_collect.Add(new TypeParam(param, new byte[] { (byte)(data[h] + 48) }));
+            }
+
+            i = HeaderDriver.StartPosInIdentFrame;
+            int start = HeaderDriver.StartPosInIdentFrame;
+
+            // Перебор идентификационных данных
+            for (int j = 0; j <= 5; j++)
+            {
+                // Поиск строк в буфере
+                for (; (char)data[i] != '\0'; i++)
+                    ;
+
+                tempr = new byte[i - start];
+                Array.Copy(data, start, tempr, 0, i - start);
+
+                param = new PLCModuleSectionParameter();
+                param.Value = element;
+                param.Name = name_param[j+3];
+                param.datatype = "STRING";
+                ident_collect.Add(new TypeParam(param, tempr));
+
+                start = ++i;
+            }
+            header = ident_collect[(byte)SeqIdentDataInCollect.modname].value + " " +
+                ident_collect[(byte)SeqIdentDataInCollect.variation].value +
+                "(" + ident_collect[(byte)SeqIdentDataInCollect.position].value + ")";
+            OnPropChanged("ident_collect");
+        }
+    }
+}

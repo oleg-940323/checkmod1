@@ -1,0 +1,370 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.IO;
+using System.Linq;
+using System.Net;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows;
+
+namespace checkmod
+{  
+
+    public class Signals : INotifyPropertyChanged
+    {
+
+        #region INotifyPropertyChanged Members
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        private void OnPropChanged(string propName)
+        {
+            if (this.PropertyChanged != null) this.PropertyChanged(this, new PropertyChangedEventArgs(propName));
+        }
+        #endregion // INotifyPropertyChanged Members
+
+        public Signals(Driver dr)
+        {
+            this.dr = dr;
+        }
+
+        Driver dr;
+
+        ~Signals()
+        {
+            forever = false;
+        }
+
+        private bool forever = true;
+
+        // Номер байта 
+        int num;
+
+        // Флаг блокировки обновления выходных данных
+        public bool f_lock_update_data = true;
+
+        UInt32 id, seq = 1;
+
+        // Длина выходных данных
+        public int len_out_data;
+
+        // Статус
+        private UInt32 _stat;
+        public UInt32 stat
+        {
+            get { return _stat; }
+            set
+            {
+                _stat = value;
+                OnPropChanged("stat");
+            }
+        }
+
+        public bool write_sign { get; set; } = false;
+
+        // Метод парсинга буфера данных
+        public void ParsData(byte[] data, Module m)
+        {
+            byte size = 0;
+            byte[] tempr2 = null;
+            long elapsedTicks;
+            
+            // Метка времени, отсчет от 1 января 1970 года
+            DateTime start_time = new DateTime(1970, 1, 1);
+
+            // Текущее время
+            DateTime current_time = DateTime.Now;
+
+            // Количество тиков в промежуток с 1 января 1970 по настоящее время
+            elapsedTicks = current_time.Ticks - start_time.Ticks;
+
+            TimeSpan elapsedSpan;
+
+            elapsedSpan = new TimeSpan(elapsedTicks);
+
+            int i = 0, j = 0, k = 0, z = 0, ind = 0;
+            num = 0;
+            byte[] tempr = new byte[65535], arr = null, temp2 = null;
+
+            // Статус модуля
+            stat = BitConverter.ToUInt32(data, num);
+            num += 4;
+
+            if (write_sign)
+            {
+                string cfg = null, path = @".\Statistic\" + m.header + ".dat", path_cfg = @".\Statistic\" + m.header + ".cfg";
+
+                // Запись в конфигурационный файл
+                using (StreamWriter fStream = new StreamWriter(File.Open(path_cfg, FileMode.OpenOrCreate)))
+                {
+                    if (m.header.StartsWith("TD9"))
+                    {
+                        cfg = $"{m.header},{m.header},2013\n{m.mod.Parameters[3].Parameter.Length},0A,{m.mod.Parameters[3].Parameter.Length}D\n";
+                        
+                        for (int q = 1; q <= m.mod.Parameters[3].Parameter.Length; q++)
+                        {
+                            cfg += $"{q},DOutput{q},,,1\n";
+                        }
+                        cfg += $"50\n1\n1000000,199999\n{DateTime.Now.Day.ToString()}/{DateTime.Now.Month.ToString()}/" +
+                            $"{DateTime.Now.Year.ToString()},{DateTime.Now.Hour.ToString()}:{DateTime.Now.Minute.ToString()}:" +
+                            $"{DateTime.Now.Second.ToString()}.{(elapsedTicks * 100 - (long)elapsedSpan.TotalSeconds * (long)Math.Pow(10, 9)).ToString()}\n" +
+                            $"{DateTime.Now.Day.ToString()}/{DateTime.Now.Month.ToString()}/{DateTime.Now.Year.ToString()},{DateTime.Now.Hour.ToString()}:" +
+                            $"{DateTime.Now.Minute.ToString()}:{DateTime.Now.Second.ToString()}." +
+                            $"{(elapsedTicks * 100 - (long)elapsedSpan.TotalSeconds * (long)Math.Pow(10, 9)).ToString()}\nASCII\n1";
+                        
+                    }
+                    else if (m.header.StartsWith("TA902"))
+                    {
+                        cfg = $"{m.header},{m.header},2013\n{m.mod.Parameters[3].Parameter.Length},{m.mod.Parameters[3].Parameter.Length}A,0D\n";
+
+                        string[] str = m.header.Split('=', '(', ',');
+
+                        byte volt = byte.Parse(str[3]);
+
+                        for (int q = 1; q <= m.mod.Parameters[3].Parameter.Length; q++)
+                        {
+                            cfg += $"{q},DInput{q},,,";
+
+                            if (q-1 < volt)
+                            {
+                                cfg += "mV";
+                            }
+                            else
+                                cfg += "mA";
+
+                            cfg += $",0.0,0.0,0,{m.mod.Parameters[3].Parameter[q - 1].Min},{m.mod.Parameters[3].Parameter[q - 1].Max},1000.00,5.00,S\n";
+                        }
+                        cfg += $"50\n1\n1000000,199999\n{DateTime.Now.Day.ToString()}/{DateTime.Now.Month.ToString()}/{DateTime.Now.Year.ToString()}," +
+                            $"{DateTime.Now.Hour.ToString()}:{DateTime.Now.Minute.ToString()}:{DateTime.Now.Second.ToString()}." +
+                            $"{(elapsedTicks * 100 - (long)elapsedSpan.TotalSeconds * (long)Math.Pow(10, 9)).ToString()}\n" + 
+                            $"{DateTime.Now.Day.ToString()}/{DateTime.Now.Month.ToString()}/{DateTime.Now.Year.ToString()}" +
+                            $",{DateTime.Now.Hour.ToString()}:{DateTime.Now.Minute.ToString()}:{DateTime.Now.Second.ToString()}." +
+                            $"{(elapsedTicks * 100 - (long)elapsedSpan.TotalSeconds * (long)Math.Pow(10, 9)).ToString()}\nFLOAT32\n1";
+                    }
+                    else if (m.header.StartsWith("TA901"))
+                    {
+                        cfg = $"{m.header},{m.header},2013\n{m.mod.Parameters[3].Parameter.Length},{m.mod.Parameters[3].Parameter.Length}A,0D\n";
+
+                        string[] str = m.header.Split('=', '(', ',');
+
+                        byte volt = byte.Parse(str[3]);
+
+                        for (int q = 1; q <= m.mod.Parameters[3].Parameter.Length; q++)
+                        {
+                            cfg += $"{q},DInput{q},,,";
+
+                            if (q - 1 < volt)
+                            {
+                                cfg += "V";
+                            }
+                            else
+                                cfg += "A";
+
+                            cfg += $",0.0,0.0,0,{m.mod.Parameters[3].Parameter[q-1].Min},{m.mod.Parameters[3].Parameter[q - 1].Max},1000.00,5.00,S\n";
+                        }
+                        cfg += $"50\n1\n1000000,199999\n{DateTime.Now.Day.ToString()}/{DateTime.Now.Month.ToString()}/{DateTime.Now.Year.ToString()}," +
+                            $"{DateTime.Now.Hour.ToString()}:{DateTime.Now.Minute.ToString()}:{DateTime.Now.Second.ToString()}." +
+                            $"{(elapsedTicks * 100 - (long)elapsedSpan.TotalSeconds * (long)Math.Pow(10, 9)).ToString()}\n" + 
+                            $"{DateTime.Now.Day.ToString()}/{DateTime.Now.Month.ToString()}/{DateTime.Now.Year.ToString()}," +
+                            $"{DateTime.Now.Hour.ToString()}:{DateTime.Now.Minute.ToString()}:{DateTime.Now.Second.ToString()}." +
+                            $"{(elapsedTicks * 100 - (long)elapsedSpan.TotalSeconds * (long)Math.Pow(10, 9)).ToString()}\nFLOAT32\n1";
+                    }
+                    else if (m.header.StartsWith("TA9"))
+                    {
+                        cfg = $"{m.header},{m.header},2013\n{m.mod.Parameters[3].Parameter.Length},{m.mod.Parameters[3].Parameter.Length}A,0D\n";
+
+                        string[] str = m.header.Split('=', '(', ',');
+
+                        byte volt = byte.Parse(str[3]);
+
+                        for (int q = 1; q <= m.mod.Parameters[3].Parameter.Length; q++)
+                        {
+                            cfg += $"{q},DInput{q},,,";
+
+                            if (q - 1 < volt)
+                            {
+                                cfg += "V";
+                            }
+                            else
+                                cfg += "A";
+                            cfg += $",0.0,0.0,0,{m.mod.Parameters[3].Parameter[q - 1].Min},{m.mod.Parameters[3].Parameter[q - 1].Max},1000.00,5.00,S\n";
+                        }
+                        cfg += $"50\n1\n1000000,199999\n{DateTime.Now.Day.ToString()}/{DateTime.Now.Month.ToString()}/{DateTime.Now.Year.ToString()}," +
+                            $"{DateTime.Now.Hour.ToString()}:{DateTime.Now.Minute.ToString()}:{DateTime.Now.Second.ToString()}." +
+                            $"{(elapsedTicks * 100 - (long)elapsedSpan.TotalSeconds * (long)Math.Pow(10, 9)).ToString()}\n" + 
+                            $"{DateTime.Now.Day.ToString()}/{DateTime.Now.Month.ToString()}/{DateTime.Now.Year.ToString()},{DateTime.Now.Hour.ToString()}:" +
+                            $"{DateTime.Now.Minute.ToString()}:{DateTime.Now.Second.ToString()}." +
+                            $"{(elapsedTicks * 100 - (long)elapsedSpan.TotalSeconds * (long)Math.Pow(10, 9)).ToString()}\nBINARY32\n1";
+                    }
+
+                    if (cfg != null)
+                        fStream.Write(cfg);
+                }
+
+
+                Array.Copy(BitConverter.GetBytes(seq).Reverse().ToArray(), 0, tempr, ind, BitConverter.GetBytes(seq++).Length);
+                ind += BitConverter.GetBytes(seq++).Length;
+
+                Array.Copy(BitConverter.GetBytes((UInt32)0).Reverse().ToArray(), 0, tempr, ind, BitConverter.GetBytes((UInt32)0).Length);
+                ind += BitConverter.GetBytes((UInt32)0).Length;
+
+                while (forever)
+                {
+                    // Идентификационный номер сигнала
+                    id = BitConverter.ToUInt32(data, num);
+                    num += 7;
+                    if (id == 0 || num > data.Length) break;
+
+                    // Входа для ЦП или выхода для модуля
+                    if (id > 1000000)
+                    {
+                        m.pr.out_signals[j].id = id;
+
+                        size = Helper.SizeOfType(m.pr.out_signals[j].data_type);
+                        tempr2 = new byte[size];
+                        Array.Copy(data, num, tempr2, 0, size);
+                        m.pr.out_signals[j].value = Helper.GetString(m.pr.out_signals[j].data_type, tempr2);
+                        j++;
+                        temp2 = new byte[size];
+                        Array.Copy(data, num, temp2, 0, size);
+
+                        Array.Copy(temp2.Reverse().ToArray(), 0, tempr, ind, size);
+                        ind += size;
+                        num += size + 8;
+                    }
+                    // Выхода для ЦП или входа для модуля
+                    else
+                    {
+                        m.pr.in_signals[i].id = id;
+
+                        size = Helper.SizeOfType(m.pr.in_signals[i].data_type);
+                        tempr2 = new byte[size];
+                        Array.Copy(data, num, tempr2, 0, size);
+                        m.pr.in_signals[i].value = Helper.GetString(m.pr.in_signals[i].data_type, tempr2);
+                        i++;
+                        temp2 = new byte[size];
+                        Array.Copy(data, num, temp2, 0, size);
+
+                        Array.Copy(temp2.Reverse().ToArray(), 0, tempr, ind, size);
+                        ind += size;
+                        num += size + 8;
+                    }
+                }
+
+                arr = new byte[ind];
+                Array.Copy(tempr, 0, arr, 0, ind);
+
+                using (BinaryWriter writer = new BinaryWriter(File.Open(path, FileMode.OpenOrCreate)))
+                {
+                    writer.Write(arr.Reverse().ToArray());
+                }
+            }
+            else 
+            {
+                while (forever)
+                {
+
+                    // Идентификационный номер сигнала
+                    id = BitConverter.ToUInt32(data, num);
+                    num += 7;
+
+                    if (id == 0 || num > data.Length) break;
+
+                    // Выхода
+                    if (id > 1000000)
+                    {
+                        m.pr.out_signals[j].id = id;
+
+                        size = Helper.SizeOfType(m.pr.out_signals[j].data_type);
+                        tempr2 = new byte[size];
+                        Array.Copy(data, num, tempr2, 0, size);
+                        m.pr.out_signals[j].value = Helper.GetString(m.pr.out_signals[j].data_type, tempr2);
+                        j++;
+                        num += 8 + size;
+                    }
+                    // Входа
+                    else
+                    {
+                        m.pr.in_signals[i].id = id;
+
+                        size = Helper.SizeOfType(m.pr.in_signals[i].data_type);
+                        tempr2 = new byte[size];
+                        Array.Copy(data, num, tempr2, 0, size);
+                        m.pr.in_signals[i].value = Helper.GetString(m.pr.in_signals[i].data_type, tempr2);
+                        i++;
+                        num += 8 + size;
+                    }
+                }
+            }
+
+            OnPropChanged("in_signals");
+            OnPropChanged("out_signals");
+            
+        }
+    }
+
+    public class Signal : INotifyPropertyChanged
+    {
+        #region INotifyPropertyChanged Members
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        private void OnPropChanged(string propName)
+        {
+            if (this.PropertyChanged != null) this.PropertyChanged(this, new PropertyChangedEventArgs(propName));
+        }
+        #endregion // INotifyPropertyChanged Members
+
+        public string name;
+        public DataStruct signal { get; set; } = new DataStruct();
+    }
+
+    // Сигнал
+    public class DataStruct : INotifyPropertyChanged
+    {
+        #region INotifyPropertyChanged Members
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        private void OnPropChanged(string propName)
+        {
+            if (this.PropertyChanged != null) this.PropertyChanged(this, new PropertyChangedEventArgs(propName));
+        }
+        #endregion // INotifyPropertyChanged Members
+
+        public UInt32 id;
+        public byte len;
+        public SignalStruct signal { get; set; } = new SignalStruct();
+    }
+
+    // Сигнал
+    public class SignalStruct : INotifyPropertyChanged
+    {
+        #region INotifyPropertyChanged Members
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        private void OnPropChanged(string propName)
+        {
+            if (this.PropertyChanged != null) this.PropertyChanged(this, new PropertyChangedEventArgs(propName));
+        }
+        #endregion // INotifyPropertyChanged Members
+
+        public byte stat;
+        public int val
+        {
+            get;
+            set;
+        }
+        public byte time_type;
+        public UInt32 time1;
+        public UInt32 time2;
+    }
+
+    public class _int
+    {
+        public int i
+        {
+            get;
+            set;
+        }
+    }
+}

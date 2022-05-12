@@ -1,0 +1,45 @@
+<?xml version="1.0"?>
+<Collect name="common_parameters">
+	<!-- Время ожидания включения эхо после последнего полученного кадра от модуля -->
+	<Parameter ParameterType="wait_unable_echo">
+		<Name>Время ожидания включения эхо после последнего полученного кадра от модуля</Name>
+		<Value>50</Value>
+		<Measurement>мс</Measurement>
+	</Parameter>
+	<!-- Период переотправки кадра эхо -->
+	<Parameter ParameterType="period_resend_echo">
+		<Name>Период переотправки кадра эхо</Name>
+		<Value>30</Value>
+		<Measurement>мс</Measurement>
+	</Parameter>
+	<!-- Количество переотправки кадра эхо -->
+	<Parameter ParameterType="numeration_resend_echo">
+		<Name>Количество переотправок кадра эхо</Name>
+		<Value>5</Value>
+		<Measurement></Measurement>
+	</Parameter>
+	<!-- Количество переповторов отправки кадров по мультикаст -->
+	<Parameter ParameterType="num_send_multi">
+		<Name>Количество повторов отправки кадра по мультикасту</Name>
+		<Value>5</Value>
+		<Measurement></Measurement>
+	</Parameter>
+	<!-- Время паузы между переотправкой кадров -->
+	<Parameter ParameterType="time_multi">
+		<Name>Время паузы между переотправкой кадра по мультикасту</Name>
+		<Value>1</Value>
+		<Measurement></Measurement>
+	</Parameter>
+	<!-- Максимальное время принятия кадра -->
+	<Parameter ParameterType="max_wait_time">
+		<Name>Время ожидания кадра-подтверрждения</Name>
+		<Value>10</Value>
+		<Measurement>мс</Measurement>
+	</Parameter>
+	<!-- Количество переотправки кадра -->
+	<Parameter ParameterType="numeration_resend">
+		<Name>Количество переповторов кадра при отсутствии кадра-подтверрждения</Name>
+		<Value>5</Value>
+		<Measurement></Measurement>
+	</Parameter>
+</Collect>

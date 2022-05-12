@@ -1,0 +1,260 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace checkmod
+{
+    class Helper
+    {
+
+        static public PLC plc { get; set; }
+
+        // Объект блокировки 
+        static public object common_lock = new object();
+
+        // Словарь с позициями значений
+        static public Dictionary<string, int[]> send_value = new Dictionary<string, int[]>() { { "DSIGNAL_T", new int[] { 2, 4 } }, { "RMS_SIG_T", new int[] { 2, 4 } }, { "TEMP_SIG_T", new int[] { 2, 4 } } };
+
+        // Словарь с кольцевыми буферами
+        static public Dictionary<string, RingBuffer<byte[]>> ring_buffer = new Dictionary<string, RingBuffer<byte[]>>();
+
+        // Словарь с потоками
+        static public Dictionary<byte, List<string>> dictionary_threades = new Dictionary<byte, List<string>>();
+
+        // Словарь с флагом управления приемом данных
+        static public Dictionary<byte, bool> dictionary_enable = new Dictionary<byte, bool>();
+
+        static public byte[][] GetInstVal(byte[] data)
+        {
+            int k = 3;
+            byte[][] values = new byte[12][];
+
+            for (int i = 0; i < 12; i++)
+            {
+                values[i] = new byte[4];
+                Array.Copy(data, k, values[i], 0, 4);
+                k += 5;
+            }
+            return values;
+        }
+
+        static public byte[] GetData(byte[] data, byte index)
+        {
+            byte[] temp = new byte[4];
+            Array.Copy(data, 3 + index * 5, temp, 0, 4);
+            return temp;
+        }
+
+
+
+        static public byte[] arr = new byte[256] 
+            {0,128,64,192,32,160,96,224,16,144,80,208,48,176,112,240,8,136,72,200,
+            40,168,104,232,24,152,88,216,56,184,120,248,4,132,68,196,36,164,100,228,
+            20,148,84,212,52,180,116,244,12,140,76,204,44,172,108,236,28,156,92,220,
+            60,188,124,252,2,130,66,194,34,162,98,226,18,146,82,210,50,178,114,242,
+            10,138,74,202,42,170,106,234,26,154,90,218,58,186,122,250,6,134,70,198,
+            38,166,102,230,22,150,86,214,54,182,118,246,14,142,78,206,46,174,110,238,
+            30,158,94,222,62,190,126,254,1,129,65,193,33,161,97,225,17,145,81,209,
+            49,177,113,241,9,137,73,201,41,169,105,233,25,153,89,217,57,185,121,249,
+            5,133,69,197,37,165,101,229,21,149,85,213,53,181,117,245,13,141,77,205,
+            45,173,109,237,29,157,93,221,61,189,125,253,3,131,67,195,35,163,99,227,
+            19,147,83,211,51,179,115,243,11,139,75,203,43,171,107,235,27,155,91,219,
+            59,187,123,251,7,135,71,199,39,167,103,231,23,151,87,215,55,183,119,247,
+            15,143,79,207,47,175,111,239,31,159,95,223,63,191,127,255};
+
+    // Возвращает размер типа данных указанный в XML
+    static public byte SizeOfType(string type)
+        {
+            return plc.DataTypes.Single(x => (x.name == type)).size;
+        }
+
+        //Возвращает минимальное и максимальное значение параметра
+        static public MinMax MinMaxOfType(string type)
+        {
+            switch (type)
+            {
+                case "BYTE":
+                    return new MinMax(byte.MinValue.ToString(), byte.MaxValue.ToString());
+
+                case "USINT":
+                    return new MinMax(byte.MinValue.ToString(), byte.MaxValue.ToString());
+
+                case "INT":
+                    return new MinMax(Int16.MinValue.ToString(), Int16.MaxValue.ToString());
+
+                case "UINT":
+                    return new MinMax(UInt16.MinValue.ToString(), UInt16.MaxValue.ToString());
+
+                case "DINT":
+                    return new MinMax(Int32.MinValue.ToString(), Int32.MaxValue.ToString());
+
+                case "UDINT":
+                    return new MinMax(UInt32.MinValue.ToString(), UInt32.MaxValue.ToString());
+
+                case "ULINT":
+                    return new MinMax(UInt64.MinValue.ToString(), UInt64.MaxValue.ToString());
+
+                case "LINT":
+                    return new MinMax(Int64.MinValue.ToString(), Int64.MaxValue.ToString());
+
+                case "FLOAT":
+                    return new MinMax(float.MinValue.ToString(), float.MaxValue.ToString());
+
+                default:
+                    return new MinMax(Int64.MinValue.ToString(), Int64.MaxValue.ToString());
+            }
+        }
+
+        // Метка времени, отсчет от 1 января 1970 года
+        static public DateTime start_time = new DateTime(1970, 1, 1);
+
+        // Возврат значения
+        static public string GetString(string type, byte[] value)
+        {
+            switch (type)
+            {
+                case "BYTE":
+                    return value[0].ToString();
+
+                case "USINT":
+                    return value[0].ToString();
+
+                case "INT":
+                    return BitConverter.ToInt16(value, 0).ToString();
+
+                case "UINT":
+                    return BitConverter.ToUInt16(value, 0).ToString();
+
+                case "DINT":
+                    return BitConverter.ToInt32(value, 0).ToString();
+
+                case "UDINT":
+                    return BitConverter.ToUInt32(value, 0).ToString();
+
+                case "ULINT":
+                    return BitConverter.ToUInt64(value, 0).ToString();
+
+                case "LINT":
+                    return BitConverter.ToInt64(value, 0).ToString();
+
+                case "FLOAT":
+                    return BitConverter.ToSingle(value, 0).ToString();
+
+                case "RMS_SIG_T":
+                    return BitConverter.ToSingle(value, 2).ToString();
+
+                case "TEMP_SIG_T":
+                    return BitConverter.ToSingle(value, 2).ToString();
+
+                case "ERRORS_SIG_T":
+                    return BitConverter.ToUInt32(value, 2).ToString();
+
+                case "DSIGNAL_T":
+                    return BitConverter.ToUInt32(value, 2).ToString();
+
+                default:
+                    return string.Empty;
+            }
+        }
+
+        // Возврат значения
+        static public byte[] GetBytes(string type, string value)
+        {
+            byte b=2;
+            byte[] bb = null;
+            long elapsedTicks;
+
+            DateTime dt = DateTime.Now;
+            TimeSpan ts;
+
+            // Количество тиков в промежуток с 1 января 1970 по настоящее время
+            elapsedTicks = dt.Ticks - Helper.start_time.Ticks;
+
+            ts = new TimeSpan(elapsedTicks);
+
+            switch (type)
+            {
+                case "BYTE":
+                    bb = new byte[1];
+                    b = Byte.Parse(value);
+                    bb[0] = b;
+                    return bb;
+
+                case "USINT":
+                    bb = new byte[1];
+                    b = Byte.Parse(value);
+                    bb[0] = b;
+                    return bb;
+
+                case "INT":
+                    return BitConverter.GetBytes(Int16.Parse(value));
+
+                case "UINT":
+                    return BitConverter.GetBytes(UInt16.Parse(value));
+
+                case "DINT":
+                    return BitConverter.GetBytes(Int32.Parse(value));
+
+                case "UDINT":
+                    return BitConverter.GetBytes(UInt32.Parse(value));
+
+                case "ULINT":
+                    bb = new byte[8];
+                    Array.Copy(Encoding.ASCII.GetBytes((elapsedTicks * 100 - (long)ts.TotalSeconds * (long)Math.Pow(10, 9)).ToString()), 0, bb, 0, 4);
+                    Array.Copy(Encoding.ASCII.GetBytes(((Int32)ts.TotalSeconds).ToString()), 0, bb, 4, 4);
+                    return bb;
+
+                case "LINT":
+                    return BitConverter.GetBytes(Int64.Parse(value));
+
+                case "FLOAT":
+                    return BitConverter.GetBytes(Single.Parse(value));
+
+                default:
+                    return null;
+            }
+        }
+
+        static public byte[] ReformatArray(string value)
+        {
+            string str;
+            byte[] arr = new byte[value.Length / 2];
+            for (int i = 0; i < value.Length / 2; i++)
+            {
+                str = value.Substring(i * 2, 2);
+                arr[i] = Convert.ToByte(str, 16);
+            }
+            return arr;
+        }
+
+        static public byte[] InvertArray(byte[] value)
+        {
+            byte[] tempr = new byte[value.Length];
+
+            for (int i = 0; i < value.Length; i++)
+            {
+                tempr[i] = arr[value[i]];
+            }
+            return tempr;
+        }
+    }
+
+    public class MinMax
+    {
+        public string min;
+        public string max;
+
+        public MinMax(string min, string max)
+        {
+            this.min = min;
+            this.max = max;
+        }
+    }
+
+
+}

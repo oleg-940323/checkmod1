@@ -1,0 +1,220 @@
+﻿using checkmod.TreeGrid;
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Linq;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows.Controls;
+using System.Windows.Media;
+
+namespace checkmod
+{
+
+    public class Module : INotifyPropertyChanged
+    {
+        #region INotifyPropertyChanged Members
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        private void OnPropChanged(string propName)
+        {
+            if (this.PropertyChanged != null) this.PropertyChanged(this, new PropertyChangedEventArgs(propName));
+        }
+        #endregion // INotifyPropertyChanged Members
+
+        public Module(byte[] data, IPEndPoint ip, Driver dr)
+        {
+            this.dr = dr;
+            _pr = new pars(dr);
+            this.ip = ip;
+            _pr.check(data, ip.Address);
+        }
+
+        public bool block_send_data = true;
+
+        public Driver dr;
+
+        public Thread ThreadSendData = null;
+
+        public IPEndPoint ip;
+
+        // Счетчик записей лога
+        public byte cnt_rows_module;
+
+        // Стартовый кадр
+        public bool start_frame = false;
+
+        // Готовность модуля к работе
+        public bool ready_work = false;
+
+        // Принятая нумерация уникаст
+        public byte num_unicast = 0;
+
+        // Принятая нумерация мультикаст
+        public byte num_multicast = 0;
+
+        // Нумерация приложения
+        public byte num_app = 0;
+
+        // Флаг сообщения о сбросе
+        public bool flag_reset = true;
+
+        // Флаг ожидания подтверждения приема конфигурации
+        public bool WaitRecConf = false;
+
+        // Флаг ожидания подтверждения приема кадра шлюза
+        public bool WaitRecGT = false;
+
+        // Флаг ожидания подтверждения приема кадра карты сигналов
+        public bool WaitRecMap = false;
+
+        // Флаг ожидания подтверждения приема команды
+        public bool WaitRecComm = false;
+
+        // Флаг ожидания подтверждения приема выходных данных
+        public bool WaitRecOutData = false;
+
+        // Список с логами
+        private List<string> _log = new List<string>();
+        public List<string> log
+        {
+            get { return _log; }
+            set { _log = value; }
+        }
+
+        private Brush _color;
+        public Brush color 
+        { 
+            get 
+            { 
+                return _color; 
+            } 
+            
+            set 
+            { 
+                _color = value;
+                OnPropChanged("color");
+            } 
+        }
+
+        // Идентификационные данные
+        private pars _pr;
+        public pars pr
+        {
+            get
+            {
+                return _pr;
+            }
+
+            set
+            {
+                _pr = value;
+            }
+        }
+
+        private PLCModule _mod;
+        public PLCModule mod { get { return _mod; } set { _mod = value; } }
+
+        public string header
+            {
+                get { return pr.full_name; }
+            }
+
+        public void update_header()
+        {
+            OnPropChanged("header");
+        }
+
+        /*// Заполнение конфигурационной коллекции 
+        public void WriteConfCollect(PLCModule item)
+        {
+            mod = item;
+
+            // Проверям пустая ли коллекция
+            if (pr.conf_param.Count == 0)
+            {
+                // Заполняем коллекцию с конфигурацией
+                for (int i = 0; i < item.Parameters[1].Parameter.Length; i++)
+                {
+
+                    if (item.Parameters[1].Parameter[i].datatype == "USINT")
+                    {
+                        pr.conf_param.Add(new IdentByte(item.Parameters[1].Parameter[i].Name, byte.Parse(item.Parameters[1].Parameter[i].Value.Text[0].Trim(new char[] { '\'' }))));
+                    }
+                    else if (item.Parameters[1].Parameter[i].datatype == "INT")
+                    {
+                        pr.conf_param.Add(new IdentInt(item.Parameters[1].Parameter[i].Name, Int16.Parse(item.Parameters[1].Parameter[i].Value.Text[0].Trim(new char[] { '\'' }))));
+                    }
+                    else if (item.Parameters[1].Parameter[i].datatype == "UINT")
+                    {
+                        pr.conf_param.Add(new IdentUint(item.Parameters[1].Parameter[i].Name, UInt16.Parse(item.Parameters[1].Parameter[i].Value.Text[0].Trim(new char[] { '\'' }))));
+                    }
+                    else if (item.Parameters[1].Parameter[i].datatype == "STRING")
+                    {
+                        pr.conf_param.Add(new IdentString(item.Parameters[1].Parameter[i].Name, item.Parameters[1].Parameter[i].Value.Text[0].Trim(new char[] { '\'' })));
+                    }
+                    else if (item.Parameters[1].Parameter[i].datatype == "FLOAT")
+                    {
+                        pr.conf_param.Add(new IdentFloat(item.Parameters[1].Parameter[i].Name, float.Parse(item.Parameters[1].Parameter[i].Value.Text[0].Trim(new char[] { '\'' }))));
+                    }
+                    else if (item.Parameters[1].Parameter[i].datatype == "UDINT")
+                    {
+                        pr.conf_param.Add(new IdentUdint(item.Parameters[1].Parameter[i].Name, UInt32.Parse(item.Parameters[1].Parameter[i].Value.Text[0].Trim(new char[] { '\'' }))));
+                    }
+                }
+            }
+        }*/
+
+        // Обновление знвчений конфигурации
+        public void UpdateConfCollect()
+        {
+            OnPropChanged("conf_param");
+        }
+
+        // Проверка на пустую строку (true - если значение для мин. или макс. отсутствует)
+        public bool CheckEmptyString(PLCModuleSectionParameter item)
+        {
+            if (item.Min != null && item.Max != null)
+            {
+                if (item.Min.Trim('\'', '\"') == string.Empty || item.Max.Trim('\'', '\"') == string.Empty)
+                    return true;
+                return false;
+            }
+            else
+                return true;
+        }
+
+        // Заполнение коллекции и привязка к графике
+        public void WriteInCollect(PLCModule item)
+        {
+            mod = item;
+
+            // Проверям пустая ли коллекция
+            if (pr.conf_param.Count == 0)
+            {
+                // Заполняем коллекцию с конфигурацией
+                if (item.Parameters[1].Parameter != null)
+                    for (int i = 0; i < item.Parameters[1].Parameter.Length; i++)
+                        pr.conf_param.Add(new TypeParam(item.Parameters[1].Parameter[i]));
+            }
+
+            // Заполняем коллекцию с выходными данными
+            if (item.Parameters[2].Parameter != null)
+                for (int i = 0; i < item.Parameters[2].Parameter.Length; i++)
+                    pr.in_signals.Add(new TypeParam(item.Parameters[2].Parameter[i]));
+
+            // Заполняем коллекцию с входными данными
+            if (item.Parameters[3].Parameter != null)
+                for (int i = 0; i < item.Parameters[3].Parameter.Length; i++)
+                    pr.out_signals.Add(new TypeParam(item.Parameters[3].Parameter[i]));
+
+            OnPropChanged("conf_param");
+            OnPropChanged("in_signals");
+            OnPropChanged("out_signals");
+        }
+    }
+}

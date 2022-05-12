@@ -1,0 +1,77 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
+using System.Windows.Documents;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Windows.Shapes;
+
+namespace checkmod
+{
+    public class s_param
+    {
+        public s_param(string name, int val, string measur)
+        {
+            this.name = name;
+            this.val = val;
+            this.measur = measur;
+            max = int.MaxValue;
+            min = int.MinValue;
+        }
+
+        public string name { get; set; }
+        public int val { get; set; }
+        public int min { get; set; }
+        public int max { get; set; }
+        public string measur { get; set; }
+    }
+
+    /// <summary>
+    /// Логика взаимодействия для Params.xaml
+    /// </summary>
+    public partial class Params : Window , INotifyPropertyChanged
+    {
+
+        #region INotifyPropertyChanged Members
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        private void OnPropChanged(string propName)
+        {
+            if (this.PropertyChanged != null) this.PropertyChanged(this, new PropertyChangedEventArgs(propName));
+        }
+        #endregion // INotifyPropertyChanged Members
+
+        public ObservableCollection<s_param> common_parameters
+        {
+            get { return HeaderDriver._common_parameters; }
+            set { HeaderDriver._common_parameters = value; }
+        }
+
+        public Params()
+        {
+            InitializeComponent();
+            Parameters.DataContext = this;
+            OnPropChanged("common_parameters");
+        }
+
+        private void Aplly_Click(object sender, RoutedEventArgs e)
+        {
+            DialogResult = true;
+            Close();
+        }
+
+        private void Cancel_Click(object sender, RoutedEventArgs e)
+        {
+            DialogResult = false;
+            Close();
+        }
+    }
+}
